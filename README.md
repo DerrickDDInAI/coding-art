@@ -23,6 +23,7 @@ This is a repository that will contain all my personal projects related to astro
 ### Objectives
 - Learn computer vision in general
 - Explore computer vision techniques to create art
+- Create NFT
 
 ### When?
 It is an ongoing project, started on `Jan 19, 2021`.
@@ -123,6 +124,7 @@ coding-art
 
 Continuously:
 - [ ] Learn and apply new computer vision techniques
+- [ ] Create art reflecting current events
 
 ### Author(s) and acknowledgment
 This project is carried out by **Van Frausum Derrick** 

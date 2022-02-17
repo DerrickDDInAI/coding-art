@@ -11,6 +11,13 @@
 */assets/data
 */assets/images
 */assets/models
+*/utils/face_detector/models
 
 # api key
 */assets/pexels_api_key
+
+# env
+.env
+
+# pycache
+__pycache__

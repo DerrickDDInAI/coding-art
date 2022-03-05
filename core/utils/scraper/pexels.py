@@ -117,7 +117,7 @@ if __name__ == "__main__":
     # declare constants & variables
     PEXELS_API_KEY = '563492ad6f917000010000018c564df5494446bfb293fda6dc3d57b3'
     QUERY = 'diversity'
-    MAX_IMGS = 10
+    MAX_IMGS = 2000
 
     # scrape images
     scrape(PEXELS_API_KEY, QUERY, MAX_IMGS)

@@ -35,7 +35,7 @@ def detect_face(input_dir, output_dir, bbox_width=12, bbox_height=16):
     img_paths = get_img_paths(input_dir)
 
     # initialize empty list & counter
-    imgs = []
+    # imgs = []
     count = 0
 
     # loop over each image path
@@ -60,8 +60,8 @@ def detect_face(input_dir, output_dir, bbox_width=12, bbox_height=16):
             # resize region of interest
             out_img = cv2.resize(roi, (bbox_width, bbox_height))
 
-            # append image to list of images
-            imgs.append(out_img)
+            # # append image to list of images
+            # imgs.append(out_img)
 
             # convert to Path if input_dir is a string
             if isinstance(output_dir, str):
@@ -72,11 +72,12 @@ def detect_face(input_dir, output_dir, bbox_width=12, bbox_height=16):
             
             # save image on disk
             cv2.imwrite(out_path, out_img)
+            print(count)
 
             # increment counter by 1
             count += 1
 
-    return np.stack(imgs)
+    # return np.stack(imgs)
 
 
 # =====================================================================
@@ -87,8 +88,8 @@ def detect_face(input_dir, output_dir, bbox_width=12, bbox_height=16):
 if __name__ == "__main__":
 
     # declare constants & variables
-    BBOX_WIDTH = 12
-    BBOX_HEIGHT = 16
+    BBOX_WIDTH = 128
+    BBOX_HEIGHT = 128
 
     # set input directory
     input_dir = Path("")
@@ -100,4 +101,5 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # extract faces
-    imgs = detect_face(input_dir, output_dir, BBOX_WIDTH, BBOX_HEIGHT)
+    # imgs = detect_face(input_dir, output_dir, BBOX_WIDTH, BBOX_HEIGHT)
+    detect_face(input_dir, output_dir, BBOX_WIDTH, BBOX_HEIGHT)

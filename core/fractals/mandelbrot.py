@@ -1,6 +1,9 @@
 """
 Program to define a class for Mandelbrot sets
 
+Sources: 
+- derived from https://realpython.com/mandelbrot-set-python/
+
 ToDo: speed up execution by using numpy
 """
 

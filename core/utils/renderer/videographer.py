@@ -17,14 +17,14 @@ import cv2
 from imageio import get_writer
 
 # import local modules
-from core.utils.get_resize_interpolation import get_interpolation
+from core.utils.renderer.get_resize_interpolation import get_interpolation
 
 # =====================================================================
 # Define functions
 # =====================================================================
 
 def create_video(
-    img_dir:str=None,
+    img_dir:Optional[str]=None,
     img_path_list:List[str]=[],
     out_path:Optional[str]=None,
     codec='MP4V',
@@ -71,7 +71,7 @@ def create_video(
     
     # if resize needed, update img_height, img_width
     if interpolation is not None:
-        img_height, img_width = out_img_shape[:-2]
+        img_height, img_width = out_img_shape[:2]
 
     # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:

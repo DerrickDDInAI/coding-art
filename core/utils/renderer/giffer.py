@@ -16,14 +16,14 @@ import cv2
 from imageio import get_writer
 
 # import local modules
-from core.utils.get_resize_interpolation import get_interpolation
+from core.utils.renderer.get_resize_interpolation import get_interpolation
 
 # =====================================================================
 # Define functions
 # =====================================================================
 
 def create_gif(
-    img_dir:str,
+    img_dir:Optional[str]=None,
     img_path_list:List[str]=[],
     out_path:Optional[str]=None,
     img_extensions:Set[str]={'.png', '.jpg', '.jpeg'},
@@ -58,9 +58,6 @@ def create_gif(
         if sort_img_list:
             img_path_list = sorted(img_path_list, reverse=reverse_img_list)
 
-        # get number of image paths
-        nb_imgs = len(img_path_list)
-
     # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:
         # generate a random uuid and convert it to string
@@ -68,6 +65,10 @@ def create_gif(
 
     # write gif within context manager
     with get_writer(out_path, mode=writer_mode) as writer:
+
+        # get number of image paths
+        nb_imgs = len(img_path_list)
+
 
         # get shape of first image in list
         source_img_height, source_img_width = cv2.imread(img_path_list[0]).shape[:2]

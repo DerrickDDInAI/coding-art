@@ -1,3 +1,0 @@
-"""
-Program to crop images
-"""

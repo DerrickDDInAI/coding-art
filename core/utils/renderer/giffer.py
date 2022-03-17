@@ -54,9 +54,9 @@ def create_gif(
         # get list of images in img directory and extend to img path list
         img_path_list.extend([str(img_path) for img_path in img_dir.glob(glob_exp) if img_path.suffix in img_extensions])
 
-        # if sort_img_list is True, sort image paths list
-        if sort_img_list:
-            img_path_list = sorted(img_path_list, reverse=reverse_img_list)
+    # if sort_img_list is True, sort image paths list
+    if sort_img_list:
+        img_path_list = sorted(img_path_list, reverse=reverse_img_list)
 
     # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:

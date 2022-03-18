@@ -26,7 +26,8 @@ def resize_with_pad(
     ref_img:Optional[np.array] = None,
     img_path:Optional[str] = None,
     ref_img_path:Optional[str] = None,
-    ref_img_shape:Optional[Tuple[int]] = None
+    ref_img_shape:Optional[Tuple[int]] = None,
+    cvt_color:Optional[int] = None
     ) -> np.array:
     """
     Function to resize image with padding to keep same aspect ratio
@@ -35,6 +36,9 @@ def resize_with_pad(
     # read image if image path passed
     if img_path is not None:
         img = cv2.imread(img_path)
+
+    if cvt_color is not None:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
 
     # read ref image if ref image path passed and no image shape passed
     if (ref_img_path is not None) and (ref_img_shape is None):
@@ -93,7 +97,8 @@ def resize_with_crop(
     ref_img:Optional[np.array] = None,
     img_path:Optional[str] = None,
     ref_img_path:Optional[str] = None,
-    ref_img_shape:Optional[Tuple[int]] = None
+    ref_img_shape:Optional[Tuple[int]] = None,
+    cvt_color:Optional[int] = None
     ) -> np.array:
     """
     Function to resize image after cropping to keep same aspect ratio
@@ -102,6 +107,9 @@ def resize_with_crop(
     # read image if image path passed
     if img_path is not None:
         img = cv2.imread(img_path)
+
+    if cvt_color is not None:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
 
     # read ref image if ref image path passed and no image shape passed
     if (ref_img_path is not None) and (ref_img_shape is None):

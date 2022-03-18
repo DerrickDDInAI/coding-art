@@ -25,7 +25,7 @@ from core.utils.renderer.get_resize_interpolation import get_interpolation
 
 def create_video(
     img_dir:Optional[str]=None,
-    img_path_list:List[str]=[],
+    img_path_list:List[str]=None,
     out_path:Optional[str]=None,
     codec='MP4V',
     fps=25,
@@ -42,6 +42,11 @@ def create_video(
     Function to create video using list of saved images in given directory and/or subdirectory
     or list
     """
+    # if list of image paths is not given
+    if img_path_list is None:
+        # initialize list
+        img_path_list = []
+
     if img_dir is not None:
         # convert img_dir to Path
         img_dir = Path(img_dir)
@@ -100,7 +105,7 @@ def create_video(
             for _ in range(duplicate_start_img_amount):
                 out_video.write(img)
         
-        if img_nb == nb_imgs - 1:
+        if img_nb == nb_imgs:
             for _ in range(duplicate_end_img_amount):
                 out_video.write(img)
 

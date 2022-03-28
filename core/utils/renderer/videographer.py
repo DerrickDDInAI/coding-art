@@ -88,10 +88,11 @@ def create_video(
     if out_path is None:
         # generate a random uuid and convert it to string
         out_path = f"{uuid4()}.{codec[:-1]}"
+    
 
     # create a videoWriter object
     fourcc = cv2.VideoWriter_fourcc(*codec)
-    out_video = cv2.VideoWriter(out_path, fourcc, fps, (img_width, img_height))
+    out_video = cv2.VideoWriter(filename=out_path, fourcc=fourcc, fps=fps, frameSize=(img_width, img_height))
 
     # iterate over the images to add frame to gif
     for img_nb, img_path in enumerate(img_path_list, start=1):

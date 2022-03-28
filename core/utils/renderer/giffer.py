@@ -10,10 +10,12 @@ or list
 from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
 from pathlib import Path
 from uuid import uuid4
+from random import shuffle
 
 # import 3rd-party modules
 import cv2
 from imageio import get_writer
+from pygifsicle import optimize
 
 # import local modules
 from core.utils.renderer.get_resize_interpolation import get_interpolation
@@ -30,6 +32,7 @@ def create_gif(
     glob_exp:str="**/*",
     sort_img_list:bool=True,
     reverse_img_list:bool=False,
+    shuffle_img_list:bool=False,
     writer_mode:str='I',
     duplicate_start_img_amount:int=0,
     duplicate_end_img_amount:int=0,
@@ -59,9 +62,13 @@ def create_gif(
         # get list of images in img directory and extend to img path list
         img_path_list.extend([str(img_path) for img_path in img_dir.glob(glob_exp) if img_path.suffix in img_extensions])
 
-    # if sort_img_list is True, sort image paths list
-    if sort_img_list:
+    # if sort_img_list is true and shuffle_img_list false, sort image paths list
+    if sort_img_list and not shuffle_img_list:
         img_path_list = sorted(img_path_list, reverse=reverse_img_list)
+
+    # if shuffle_img_list is true, shuffle img path list
+    elif shuffle_img_list:
+        shuffle(img_path_list)
 
     # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:
@@ -75,8 +82,8 @@ def create_gif(
         nb_imgs = len(img_path_list)
 
 
-        # get shape of first image in list
-        source_img_height, source_img_width = cv2.imread(img_path_list[0]).shape[:2]
+        # # get shape of first image in list
+        # source_img_height, source_img_width = cv2.imread(img_path_list[0]).shape[:2]
 
         # if out_img_shape is provided, unpack it
         if out_img_shape is not None:
@@ -93,6 +100,8 @@ def create_gif(
         # iterate over the images to add frame to gif
         for img_nb, img_path in enumerate(img_path_list, start=1):
             img = cv2.imread(img_path)
+
+            source_img_height, source_img_width = img.shape[:2]
 
             if out_img_shape is not None:
 
@@ -119,3 +128,6 @@ def create_gif(
 
             # write output frame
             writer.append_data(img)
+
+    # optimize gif to reduce size
+    optimize(out_path)

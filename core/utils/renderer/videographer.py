@@ -11,6 +11,7 @@ ToDo: create a class renderer to handle video and gif creation
 from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
 from pathlib import Path
 from uuid import uuid4
+from random import shuffle
 
 # import 3rd-party modules
 import cv2
@@ -33,6 +34,7 @@ def create_video(
     glob_exp:str="**/*",
     sort_img_list:bool=True,
     reverse_img_list:bool=False,
+    shuffle_img_list:bool=False,
     duplicate_start_img_amount:int=0,
     duplicate_end_img_amount:int=0,
     out_img_shape:Optional[Tuple[int]]=None,
@@ -54,9 +56,13 @@ def create_video(
         # get list of images in img directory and extend to img path list
         img_path_list.extend([str(img_path) for img_path in img_dir.glob(glob_exp) if img_path.suffix in img_extensions])
         
-    # if sort_img_list is True, sort image paths list
-    if sort_img_list:
+    # if sort_img_list is true and shuffle_img_list false, sort image paths list
+    if sort_img_list and not shuffle_img_list:
         img_path_list = sorted(img_path_list, reverse=reverse_img_list)
+
+    # if shuffle_img_list is true, shuffle img path list
+    elif shuffle_img_list:
+        shuffle(img_path_list)
 
     # get number of image paths
     nb_imgs = len(img_path_list)

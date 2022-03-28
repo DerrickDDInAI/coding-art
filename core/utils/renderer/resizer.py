@@ -43,9 +43,10 @@ def resize_with_pad(
     # read ref image if ref image path passed and no image shape passed
     if (ref_img_path is not None) and (ref_img_shape is None):
         ref_img = cv2.imread(ref_img_path)
+    
+    if ref_img is not None:
         ref_img_shape = ref_img.shape
 
-    # get images shapes
     img_height, img_width, img_channel = img.shape
     ref_img_height, ref_img_width, img_channel = ref_img_shape
     
@@ -114,7 +115,9 @@ def resize_with_crop(
     # read ref image if ref image path passed and no image shape passed
     if (ref_img_path is not None) and (ref_img_shape is None):
         ref_img = cv2.imread(ref_img_path)
-        ref_img_shape = ref_img
+    
+    if ref_img is not None:
+        ref_img_shape = ref_img.shape
 
     # get images shapes
     img_height, img_width, img_channel = img.shape

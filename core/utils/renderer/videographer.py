@@ -8,17 +8,19 @@ ToDo: create a class renderer to handle video and gif creation
 # =====================================================================
 
 # import internal modules
-from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
+from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union, Callable
 from pathlib import Path
 from uuid import uuid4
 from random import shuffle
 
 # import 3rd-party modules
 import cv2
+from grpc import Call
 from imageio import get_writer
 
 # import local modules
 from core.utils.renderer.get_resize_interpolation import get_interpolation
+from core.utils.renderer.resizer import resize_with_crop, resize_with_pad
 
 # =====================================================================
 # Define functions
@@ -38,6 +40,7 @@ def create_video(
     duplicate_start_img_amount:int=0,
     duplicate_end_img_amount:int=0,
     out_img_shape:Optional[Tuple[int]]=None,
+    resize_fct:Optional[Callable]=None,
     # out_img_scale:Optional[Tuple[int]]=None
     ):
     """
@@ -68,7 +71,7 @@ def create_video(
     nb_imgs = len(img_path_list)
 
     # get shape of first image in list (if no output shape provided, the shape of first image will be the output shape)
-    img_height, img_width = cv2.imread(img_path_list[0]).shape[:2]
+    img_height, img_width, img_channel = cv2.imread(img_path_list[0]).shape
 
     # # if out_img_scale is provided, unpack it
     # if out_img_scale is not None:
@@ -82,7 +85,7 @@ def create_video(
     
     # if resize needed, update img_height, img_width
     if interpolation is not None:
-        img_height, img_width = out_img_shape[:2]
+        img_height, img_width, img_channel = out_img_shape
 
     # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:
@@ -97,15 +100,18 @@ def create_video(
     # iterate over the images to add frame to gif
     for img_nb, img_path in enumerate(img_path_list, start=1):
         img = cv2.imread(img_path)
+        if resize_fct is not None:
+            img = resize_fct(img=img, ref_img_shape=(img_height, img_width, img_channel))
 
-        # get best interpolation or get none if no resize needed
-        # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
-        interpolation = get_interpolation((img_height, img_width), out_img_shape=img.shape[:2])
+        else:
+            # get best interpolation or get none if no resize needed
+            # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
+            interpolation = get_interpolation((img_height, img_width), out_img_shape=img.shape[:2])
 
-        # if needed, resize image
-        if interpolation is not None:
-            # img = cv2.resize(img, out_img_shape, fx=out_img_scale_fx, fy=out_img_scale_fy, interpolation=interpolation)
-            img = cv2.resize(img, (img_width, img_height), interpolation=interpolation)
+            # if needed, resize image
+            if interpolation is not None:
+                # img = cv2.resize(img, out_img_shape, fx=out_img_scale_fx, fy=out_img_scale_fy, interpolation=interpolation)
+                img = cv2.resize(img, (img_width, img_height), interpolation=interpolation)
 
         # write several frames for beginning and ending
         if img_nb == 1:

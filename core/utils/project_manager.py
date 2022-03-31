@@ -35,8 +35,8 @@ class Project:
         self,
         project_dir: Union[str,Path],
         in_img_dir:Optional[str] = None,
-        in_img_path_list:List[str] = [],
-        out_img_dir_list: List[Union[str,Path]] = [],
+        in_img_path_list:Optional[List[str]] = None,
+        out_img_dir_list: Optional[List[Union[str,Path]]] = None,
         parents: Optional[bool] = True,
         exist_ok: Optional[bool] = True,
         in_project_dir: bool = True,
@@ -48,8 +48,13 @@ class Project:
         # convert project dir to path if string provided
         self.project_dir = Path(project_dir)
 
+        # if list is none, initialize it
+        if in_img_path_list is None:
+            self.in_img_path_list = []
+        if out_img_dir_list is None:
+            self.out_img_dir_list = []
+        
         self.in_img_dir = in_img_dir
-        self.in_img_path_list = in_img_path_list.copy() # copy to prevent sharing same list address with multiple projects
 
         # if input image directory given
         if in_img_dir is not None:
@@ -99,7 +104,7 @@ class Project:
     @staticmethod
     def get_img_path_list(
         img_dir:Optional[Union[str,Path]]=None,
-        img_path_list:List[str]=[],
+        img_path_list:Optional[List[str]]=None,
         img_extensions:Set[str]={'.png', '.jpg', '.jpeg'},
         glob_exp:str="**/*",
         sort_img_list:bool=True,
@@ -108,6 +113,10 @@ class Project:
         """
         Utility function to get a list of img paths
         """
+        # initialize img_path_list if not provided
+        if img_path_list is None:
+            img_path_list = []
+
         # if image directory provided
         if img_dir is not None:
             # convert img_dir to path if string provided

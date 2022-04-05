@@ -7,7 +7,7 @@ or list
 # =====================================================================
 
 # import internal modules
-from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
+from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union, Callable
 from pathlib import Path
 from uuid import uuid4
 from random import shuffle
@@ -37,6 +37,8 @@ def create_gif(
     duplicate_start_img_amount:int=0,
     duplicate_end_img_amount:int=0,
     out_img_shape:Optional[Tuple[int]]=None,
+    resize_fct:Optional[Callable]=None,
+    optimize_gif:Optional[bool]=True
     # out_img_scale:Optional[Tuple[int]]=None
     ):
     """
@@ -48,6 +50,7 @@ def create_gif(
     * out_path: path where to save the output gif; if None, save gif with a random unique identifier
     * img_extensions: set of extensions to look for in images directory
     * reverse_img_list: boolean to reverse list of images; False by default
+    * optimize_gif: to reduce gif memory sif (caution: can decrease the quality)
     """
     # if list of image paths is not given
     if img_path_list is None:
@@ -104,15 +107,20 @@ def create_gif(
             source_img_height, source_img_width = img.shape[:2]
 
             if out_img_shape is not None:
-
-                # get best interpolation or get none if no resize needed
-                # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
-                interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape)
                 
-                # if needed, resize image
-                if interpolation is not None:
-                    # img = cv2.resize(img, (out_img_width, out_img_height), fx=out_img_scale_fx, fy=out_img_scale_fy, interpolation=interpolation)
-                    img = cv2.resize(img, (out_img_width, out_img_height), interpolation=interpolation)
+                if resize_fct is not None:
+                    img = resize_fct(img=img, ref_img_shape=out_img_shape)
+
+                else:
+
+                    # get best interpolation or get none if no resize needed
+                    # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
+                    interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape)
+                    
+                    # if needed, resize image
+                    if interpolation is not None:
+                        # img = cv2.resize(img, (out_img_width, out_img_height), fx=out_img_scale_fx, fy=out_img_scale_fy, interpolation=interpolation)
+                        img = cv2.resize(img, (out_img_width, out_img_height), interpolation=interpolation)
 
             # convert image to RGB
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -129,5 +137,6 @@ def create_gif(
             # write output frame
             writer.append_data(img)
 
-    # optimize gif to reduce size
-    optimize(out_path)
+    if optimize_gif:
+        # optimize gif to reduce size
+        optimize(out_path)

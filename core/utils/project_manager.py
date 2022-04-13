@@ -53,6 +53,10 @@ class Project:
             self.in_img_path_list = []
         if out_img_dir_list is None:
             self.out_img_dir_list = []
+
+        # iterate over list of output image directory
+        for out_img_dir in self.out_img_dir_list:
+            self.make_dir(out_img_dir, parents=parents, exist_ok=exist_ok, in_project_dir=in_project_dir)
         
         self.in_img_dir = in_img_dir
 
@@ -69,10 +73,6 @@ class Project:
 
         # initiate output image directory dictionary
         self.out_img_dir_dict = dict()
-
-        # iterate over list of output image directory
-        for out_img_dir in out_img_dir_list:
-            self.make_dir(out_img_dir, parents=parents, exist_ok=exist_ok, in_project_dir=in_project_dir)
 
 
     def make_dir(

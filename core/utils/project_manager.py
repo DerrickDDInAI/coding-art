@@ -48,6 +48,10 @@ class Project:
         # convert project dir to path if string provided
         self.project_dir = Path(project_dir)
 
+        # create project directory if it doesn't exist
+        self.make_dir(self.project_dir, parents=parents, exist_ok=exist_ok, in_project_dir=False, is_project_dir=True)
+
+
         # if list is none, initialize it
         if in_img_path_list is None:
             self.in_img_path_list = []
@@ -80,7 +84,8 @@ class Project:
         dir: Union[str,Path],
         parents: Optional[bool] = True,
         exist_ok: Optional[bool] = True,
-        in_project_dir: bool = True
+        in_project_dir: Optional[bool] = True,
+        is_project_dir: Optional[bool] = False
     ) -> None:
         """
         Function to make directory
@@ -96,9 +101,11 @@ class Project:
         # create dir if don't exist
         # parents=True to create any intermediate parent dirs if don't exist
         dir.mkdir(parents=parents, exist_ok=exist_ok)
-
-        # add dir to out_img_dir_dict
-        self.out_img_dir_dict[dir.name] = dir
+        
+        # if this function is not called to create the project dir itself
+        if not is_project_dir:
+            # add dir to out_img_dir_dict
+            self.out_img_dir_dict[dir.name] = dir
     
 
     @staticmethod

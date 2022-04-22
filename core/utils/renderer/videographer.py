@@ -15,12 +15,10 @@ from random import shuffle
 
 # import 3rd-party modules
 import cv2
-from grpc import Call
-from imageio import get_writer
+import numpy as np
 
 # import local modules
 from core.utils.renderer.get_resize_interpolation import get_interpolation
-from core.utils.renderer.resizer import resize_with_crop, resize_with_pad
 
 # =====================================================================
 # Define functions
@@ -41,6 +39,7 @@ def create_video(
     duplicate_end_img_amount:int=0,
     out_img_shape:Optional[Tuple[int]]=None,
     resize_fct:Optional[Callable]=None,
+    rotate_90:Optional[int]=None,
     # out_img_scale:Optional[Tuple[int]]=None
     ):
     """
@@ -100,6 +99,10 @@ def create_video(
     # iterate over the images to add frame to gif
     for img_nb, img_path in enumerate(img_path_list, start=1):
         img = cv2.imread(img_path)
+
+        if rotate_90 is not None:
+            img = np.rot90(img, rotate_90)
+
         if resize_fct is not None:
             img = resize_fct(img=img, ref_img_shape=(img_height, img_width, img_channel))
 

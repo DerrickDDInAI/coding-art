@@ -51,12 +51,12 @@ def resize_with_pad(
     ref_img_height, ref_img_width, img_channel = ref_img_shape
     
     # print images shapes
-    print(f"img: {img_height, img_width}, ref_img: {(ref_img_height, ref_img_width)}")
+    # print(f"img: {img_height, img_width}, ref_img: {(ref_img_height, ref_img_width)}")
 
     # get aspect ratio of both images
     img_ratio = img_width/img_height
     ref_img_ratio = ref_img_width/ref_img_height
-    print(f"img_ratio: {img_ratio}, ref_img_ratio: {ref_img_ratio}")
+    # print(f"img_ratio: {img_ratio}, ref_img_ratio: {ref_img_ratio}")
 
     # if same aspect ratio, no need for padding
     if img_ratio == ref_img_ratio:
@@ -124,12 +124,12 @@ def resize_with_crop(
     ref_img_height, ref_img_width, img_channel = ref_img_shape
     
     # print images shapes
-    print(f"img: {img_height, img_width}, ref_img: {(ref_img_height, ref_img_width)}")
+    # print(f"img: {img_height, img_width}, ref_img: {(ref_img_height, ref_img_width)}")
 
     # get aspect ratio of both images
     img_ratio = img_width/img_height
     ref_img_ratio = ref_img_width/ref_img_height
-    print(f"img_ratio: {img_ratio}, ref_img_ratio: {ref_img_ratio}")
+    # print(f"img_ratio: {img_ratio}, ref_img_ratio: {ref_img_ratio}")
 
     # if same aspect ratio, no need for cropping
     if img_ratio == ref_img_ratio:

@@ -51,6 +51,11 @@ class Project:
         # create project directory if it doesn't exist
         self.make_dir(self.project_dir, parents=parents, exist_ok=exist_ok, in_project_dir=False, is_project_dir=True)
 
+        self.in_img_dir = in_img_dir
+        self.out_img_dir_list = out_img_dir_list
+        
+        # initiate output image directory dictionary
+        self.out_img_dir_dict = dict()
 
         # if list is none, initialize it
         if in_img_path_list is None:
@@ -61,8 +66,6 @@ class Project:
         # iterate over list of output image directory
         for out_img_dir in self.out_img_dir_list:
             self.make_dir(out_img_dir, parents=parents, exist_ok=exist_ok, in_project_dir=in_project_dir)
-        
-        self.in_img_dir = in_img_dir
 
         # if input image directory given
         if in_img_dir is not None:
@@ -74,9 +77,6 @@ class Project:
 
         # get img paths list
         self.in_img_path_list = self.get_img_path_list(img_dir=self.in_img_dir, img_path_list=self.in_img_path_list, **get_img_path_args)
-
-        # initiate output image directory dictionary
-        self.out_img_dir_dict = dict()
 
 
     def make_dir(
@@ -112,7 +112,7 @@ class Project:
     def get_img_path_list(
         img_dir:Optional[Union[str,Path]]=None,
         img_path_list:Optional[List[str]]=None,
-        img_extensions:Set[str]={'.png', '.jpg', '.jpeg'},
+        img_extensions:Set[str]={'.png', '.jpg', '.jpeg', '.JPG', '.JPEG', '.PNG'},
         glob_exp:str="**/*",
         sort_img_list:bool=True,
         reverse_img_list:bool=False,

@@ -100,7 +100,15 @@ def add_text(text: str, obj_name=None, collection=None):
 
 def update_text_handler(scene, text_obj, text_values_per_frame):
     """
-    Function to update text value
+    Function to update text value.
+    Usage:
+    from bpy.app.handlers import persistent
+
+    @persistent
+    def update(scene):
+        blender_utils.update_text_handler(scene, text_obj, text_values_per_frame)
+    
+    bpy.app.handlers.frame_change_pre.append(update)
     """
     current_frame = scene.frame_current
     text_obj.data.body = f"{text_values_per_frame[current_frame]}"

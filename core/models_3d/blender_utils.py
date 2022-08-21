@@ -114,6 +114,60 @@ def update_text_handler(scene, text_obj, text_values_per_frame):
     text_obj.data.body = f"{text_values_per_frame[current_frame]}"
 
 
+def add_material(material_name: str):
+    """
+    Function to create a material
+    """
+
+    # get material if exists or else none
+    material = bpy.data.materials.get(material_name)
+
+    # if no material, create a new one
+    if material is None:
+        material = bpy.data.materials.new(name=material_name)
+        
+    # enable nodes
+    material.use_nodes = True
+    
+    # if node tree already exists,
+    # clear all links and nodes to start
+    if material.node_tree:
+        material.node_tree.links.clear()
+        material.node_tree.nodes.clear()
+
+    return material
+
+
+def add_shader(material_name, type='ShaderNodeBsdfPrincipled', settings_dict=None):
+    """
+    Function to add a shader to the material
+    """
+
+    # add material
+    material = add_material(material_name=material_name)
+
+    # get nodes and links
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    # create output node and set node location
+    output_node = nodes.new(type='ShaderNodeOutputMaterial')
+    output_node.location = 400,0 # set node location
+
+    # create shader
+    shader = nodes.new(type=type)
+    node = nodes[shader.name]
+
+    # set shader properties if provided
+    if settings_dict is not None:
+        for key, value in settings_dict.items():
+            node.inputs[key].default_value = value
+
+    # link shader output to output node
+    links.new(shader.outputs[0], output_node.inputs[0])
+
+    return material
+
 # =====================================================================
 # Test functions
 # =====================================================================

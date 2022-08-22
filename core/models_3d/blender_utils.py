@@ -166,7 +166,7 @@ def add_shader(material_name, type='ShaderNodeBsdfPrincipled', settings_dict=Non
     # link shader output to output node
     links.new(shader.outputs[0], output_node.inputs[0])
 
-    return material
+    return material, shader
 
 # =====================================================================
 # Test functions

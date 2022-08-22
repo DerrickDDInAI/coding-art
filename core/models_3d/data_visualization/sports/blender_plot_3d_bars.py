@@ -29,6 +29,7 @@
 import sys
 from pathlib import Path
 from uuid import uuid4
+import colorsys
 
 # import 3rd-party modules
 import bpy
@@ -40,11 +41,13 @@ from bpy.app.handlers import persistent
 
 # import local modules
 # current_working_directory = Path(__file__).parent.resolve()
-current_working_directory = "/Users/derrickvanfrausum/BeCode_AI/git-repos/coding-art/core/models_3d"
+utility_directory = "/Users/derrickvanfrausum/BeCode_AI/git-repos/coding-art/core/models_3d"
+current_working_directory = "/Users/derrickvanfrausum/BeCode_AI/git-repos/coding-art/core/models_3d/data_visualization/sports"
+sys.path.append(utility_directory)
 sys.path.append(current_working_directory)
 
 import blender_utils
-# import plot_heartrate
+import simulate_heartrate
 
 # =====================================================================
 # Define functions
@@ -189,13 +192,23 @@ def create_animated_bar(
             psys.settings.instance_object = sphere_obj
             psys.settings.particle_size = 0.05
 
+            #input
+            (h, s, v) = (200 - z_dict["material"].iloc[z_idx], 244, 85)
+            #normalize
+            (h, s, v) = (h / 255, s / 255, v / 179)
+            #convert to RGB
+            (r, g, b) = colorsys.hsv_to_rgb(h, s, v)
+
             # add material shader with specified settings
             settings_dict = {
-                'Color': ((200 - z_dict["material"].iloc[z_idx])/100, 0.06, 0.083378, 1),
-                'Strength': z_dict["material"].iloc[z_idx]/100
+                'Color': (r, g, b, 1),
+                # 'Strength': (z_dict["material"].iloc[z_idx]/100)**3
             }
-            material = blender_utils.add_shader(material_name=f"material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+            material, shader = blender_utils.add_shader(material_name=f"material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
             
+            # get simulated heartrate values
+            simulated_heartrates = simulate_heartrate.simulate_heartbeat([z_dict["material"].iloc[z_idx]], capture_length=int(np.max([1, nb_frames * 30])))
+
             # apply the material to cube object
             sphere_obj.data.materials.append(material)
 
@@ -214,6 +227,10 @@ def create_animated_bar(
             cube_obj.keyframe_insert(data_path="location", frame=frame_nb)
             cube_obj.scale = (1, 1, sample_y)
             cube_obj.keyframe_insert(data_path="scale", frame=frame_nb)
+
+            # set material value with values from simulated hearbeat and add keyframe
+            material.node_tree.nodes[shader.name].inputs["Strength"].default_value = simulated_heartrates[frame_nb]
+            material.node_tree.nodes[shader.name].inputs["Strength"].keyframe_insert("default_value", frame=frame_nb)
         
         # add y samples to previous y samples to get the total y values per frame
         previous_y_linspace += y_linspace

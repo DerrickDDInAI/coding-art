@@ -8,7 +8,7 @@
 - fix create x and y label collections
 - add modifiers, materials
 - add calories inside rectangle (with wireframe modifier) as density of rectangle
-- add blinking equal to average HR
+- add blinking equal to average HR: normalize heartrate (as we have negative values for now)
 
 ## tips:
 - to install dependency in blender python:
@@ -26,6 +26,7 @@
 
 # import internal modules
 # from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
+from calendar import c
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -52,6 +53,14 @@ import simulate_heartrate
 # =====================================================================
 # Define functions
 # =====================================================================
+
+def normalize_between_range(xs, a, b):
+    """
+    Function to normalize a series between range [a,b]
+    """
+    min_x = np.min(xs)
+    max_x = np.max(xs)
+    return (b - a) * (xs - min_x)/(max_x - min_x) + a
 
 def create_animated_bar(
     ys, x,
@@ -124,6 +133,18 @@ def create_animated_bar(
         # bpy.context.object.modifiers["Solidify"].thickness = 0.27
         modifier = x_text_obj.modifiers.new(name="solidify", type="SOLIDIFY")
         modifier.thickness = 0.27
+
+        # add material shader with specified settings
+        r,g,b = np.array((222,183,40))/255
+        a = 1
+        settings_dict = {
+            'Color': (r, g, b, a),
+            'Strength': 3
+        }
+        material, shader = blender_utils.add_shader(material_name=f"x_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+
+        # apply the material to cube object
+        x_text_obj.data.materials.append(material)
         
         # add y label text and set transform properties (add initial y text that will be updated at each frame)
         y_text_obj = blender_utils.add_text(f"{total_y:.2f} km", collection=parent_label_collection)
@@ -139,6 +160,18 @@ def create_animated_bar(
         # bpy.context.object.modifiers["Solidify"].thickness = 0.27
         modifier = y_text_obj.modifiers.new(name="solidify", type="SOLIDIFY")
         modifier.thickness = 0.27
+        
+        # add material shader with specified settings
+        r,g,b = np.array((221,17,17))/255
+        a = 1
+        settings_dict = {
+            'Color': (r, g, b, a),
+            'Strength': 3
+        }
+        material, shader = blender_utils.add_shader(material_name=f"y_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+
+        # apply the material to cube object
+        y_text_obj.data.materials.append(material)
 
     
     ## 2. Create bar
@@ -190,31 +223,48 @@ def create_animated_bar(
             psys.settings.physics_type = 'NO'
             psys.settings.render_type = 'OBJECT'
             psys.settings.instance_object = sphere_obj
-            psys.settings.particle_size = 0.05
+            psys.settings.particle_size = 0.033
 
             #input
-            (h, s, v) = (200 - z_dict["material"].iloc[z_idx], 244, 85)
+            (h, s, v) = (z_dict["material"].iloc[z_idx], 244, 85)
             #normalize
-            (h, s, v) = (h / 255, s / 255, v / 179)
+            (h, s, v) = (h / 179, s / 255, v / 255)
             #convert to RGB
             (r, g, b) = colorsys.hsv_to_rgb(h, s, v)
 
             # add material shader with specified settings
+            # r = (z_dict["material"].iloc[z_idx]/200)*255
+            # r,g,b = np.array((r,215,4))/255
+            a = 1
             settings_dict = {
-                'Color': (r, g, b, 1),
+                'Color': (r, g, b, a),
                 # 'Strength': (z_dict["material"].iloc[z_idx]/100)**3
             }
-            material, shader = blender_utils.add_shader(material_name=f"material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
-            
-            # get simulated heartrate values
-            simulated_heartrates = simulate_heartrate.simulate_heartbeat([z_dict["material"].iloc[z_idx]], capture_length=int(np.max([1, nb_frames * 30])))
+            ps_material, ps_shader = blender_utils.add_shader(material_name=f"sphere_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
 
             # apply the material to cube object
-            sphere_obj.data.materials.append(material)
+            sphere_obj.data.materials.append(ps_material)
 
+            # get simulated heartrate values
+            simulated_heartrates = simulate_heartrate.simulate_heartbeat([z_dict["material"].iloc[z_idx]], capture_length=int(np.max([1, nb_frames * 30])))
+        
+        
         # add wireframe modifier
         if wireframe:
             modifier = cube_obj.modifiers.new(name="wireframe", type="WIREFRAME")
+
+        # add material shader with specified settings
+        r,g,b = np.array((7,26,222))/255
+        a = 1
+        settings_dict = {
+            'Color': (r, g, b, a),
+            'Strength': 20
+        }
+        material, shader = blender_utils.add_shader(material_name=f"cube_obj_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+
+        # apply the material to cube object
+        cube_obj.data.materials.append(material)
+
 
         # get n (nb of frames) evenly spaced y samples
         y_linspace = np.linspace(0, y, nb_frames)
@@ -229,8 +279,8 @@ def create_animated_bar(
             cube_obj.keyframe_insert(data_path="scale", frame=frame_nb)
 
             # set material value with values from simulated hearbeat and add keyframe
-            material.node_tree.nodes[shader.name].inputs["Strength"].default_value = simulated_heartrates[frame_nb]
-            material.node_tree.nodes[shader.name].inputs["Strength"].keyframe_insert("default_value", frame=frame_nb)
+            ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].default_value = simulated_heartrates[frame_nb]
+            ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].keyframe_insert("default_value", frame=frame_nb)
         
         # add y samples to previous y samples to get the total y values per frame
         previous_y_linspace += y_linspace
@@ -270,7 +320,7 @@ def create_animated_bar(
 
 # set number of frames for the animation
 FRAME_START = 0
-FRAME_END = 30
+FRAME_END = 30*10
 nb_frames = FRAME_END - FRAME_START
 
 # set size of cubes
@@ -278,7 +328,7 @@ CUBE_SIZE = 1
 
 
 # =====================================================================
-# Set the scene
+# Set the scene and render settings
 # =====================================================================
 
 # reset scene by erasing everything
@@ -287,6 +337,11 @@ blender_utils.reset_scene()
 # set scene frame start and end 
 blender_utils.set_scene_frame_range(bpy.context.scene, frame_start=FRAME_START, frame_end=FRAME_END)
 
+# set dark world
+blender_utils.set_default_world(color_rgba=(0,0,0,1))
+
+# set render settings
+blender_utils.set_default_eevee_render_settings()
 
 # =====================================================================
 # Read data
@@ -298,6 +353,9 @@ df = pd.read_csv("/Users/derrickvanfrausum/BeCode_AI/git-repos/coding-art/core/a
 # get list of dates (without duplicates) and sort it
 dates = df["Date_yy-mm-dd"].unique()[:3]
 dates.sort()
+
+# normalize calories_series to range of hue values [0,179] (toDo: add normalization to preprocessing data)
+df.Calories = normalize_between_range(df.Calories, 0, 179)
 
 
 # =====================================================================

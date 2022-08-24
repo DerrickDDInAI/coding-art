@@ -62,6 +62,30 @@ def create_collection(name, parent_collection=None):
 
     return collection
 
+
+def set_default_eevee_render_settings():
+    """
+    Function to set better default settings for Eevee engine
+    """
+    # set Eevee engine
+    bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+
+    # set eevee settings
+    bpy.context.scene.eevee.use_gtao = True
+    bpy.context.scene.eevee.use_bloom = True
+    bpy.context.scene.eevee.use_bokeh_high_quality_slight_defocus = True
+    bpy.context.scene.eevee.use_ssr = True
+    bpy.context.scene.eevee.use_shadow_high_bitdepth = True
+    bpy.context.scene.view_settings.look = 'Very High Contrast'
+
+
+def set_default_world(color_rgba=(0,0,0,1)):
+    """
+    Function to set default world
+    """
+    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs["Color"].default_value = color_rgba
+
+
 def set_scene_frame_range(scene, frame_start = 0, frame_end = 30):
     """
     Function to set scene frame start and end

@@ -2,6 +2,9 @@
 Tutorial Grease Pencil
 Sources:
     - https://towardsdatascience.com/blender-2-8-grease-pencil-scripting-and-generative-art-cbbfd3967590
+
+Ideas:
+    - np.sin(np.linspace(- np.pi, np.pi * 100, 100)) 
 """
 
 # =====================================================================

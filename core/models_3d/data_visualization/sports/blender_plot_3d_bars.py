@@ -70,6 +70,7 @@ def create_animated_bar(
     # nb_frames=30, 
     frame_start = 0,
     frame_end = 30,
+    fps=30,
     show_labels=True,
     y_label_collection_name= "Y_label_collection",
     x_label_collection_name="X_label_collection",
@@ -246,8 +247,27 @@ def create_animated_bar(
             sphere_obj.data.materials.append(ps_material)
 
             # get simulated heartrate values
-            simulated_heartrates = simulate_heartrate.simulate_heartbeat([z_dict["material"].iloc[z_idx]], capture_length=int(np.max([1, nb_frames * 30])))
-        
+            # simulated_heartrates = simulate_heartrate.simulate_heartbeat([z_dict["material"].iloc[z_idx]], capture_length=int(np.max([1, nb_frames * 30])))
+
+            heartrate_per_sec = z_dict["material"].iloc[z_idx] / 60
+            heartrate_step_for_animation = int(fps/heartrate_per_sec)
+            heatrate_values = np.zeros(shape=(nb_frames//heartrate_step_for_animation, heartrate_step_for_animation))
+            # heatrate_values[::heartrate_step_for_animation] = 1
+            heartrate_half_step = heartrate_step_for_animation//2 + 1
+            modulo_hr_half_step = heartrate_step_for_animation%2
+            first_half_step_values = np.logspace(0, -2, num=heartrate_half_step)
+            second_half_step_values = np.logspace(-2, 0, num=heartrate_half_step)
+            # second_half_step_values = np.logspace(0, -1, base=np.exp(2), num=heartrate_half_step)
+
+            smooth_heartrate_step = np.append(first_half_step_values[:heartrate_half_step - 1 + modulo_hr_half_step], second_half_step_values[:-1])
+            # smooth_heartrate_step = np.append(first_half_step_values[1:], second_half_step_values[1:])
+            # heatrate_values = heatrate_values.reshape((len(heatrate_values)//heartrate_step_for_animation, heartrate_step_for_animation))
+            heatrate_values[:] = smooth_heartrate_step
+            heatrate_values = heatrate_values.reshape(-1)
+            modulo_hr = nb_frames%heartrate_step_for_animation
+            remaining_heartrate_values = np.zeros(modulo_hr)
+            remaining_heartrate_values = first_half_step_values[:modulo_hr]
+            heatrate_values = np.append(heatrate_values, remaining_heartrate_values)
         
         # add wireframe modifier
         if wireframe:
@@ -279,7 +299,8 @@ def create_animated_bar(
             cube_obj.keyframe_insert(data_path="scale", frame=frame_nb)
 
             # set material value with values from simulated hearbeat and add keyframe
-            ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].default_value = simulated_heartrates[frame_nb]
+            # ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].default_value = simulated_heartrates[frame_nb]
+            ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].default_value = heatrate_values[frame_nb]
             ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].keyframe_insert("default_value", frame=frame_nb)
         
         # add y samples to previous y samples to get the total y values per frame
@@ -386,6 +407,7 @@ for bar_center_location_x, activity_date in enumerate(dates):
         # nb_frames=30, 
         frame_start=FRAME_START,
         frame_end=FRAME_END,
+        fps=30,
         show_labels=True,
         y_label_collection_name="Y_label_collection",
         x_label_collection_name="X_label_collection",

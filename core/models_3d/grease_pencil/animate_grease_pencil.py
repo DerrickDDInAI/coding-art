@@ -66,8 +66,11 @@ for frame in range(NUM_FRAMES):
         gp_frame = gp_layer.frames.new(frame*FRAMES_SPACING)
 
     else:
+        # create new grease pencil layer at frame 0 
         if frame == 0:
             gp_frame = gp_layer.frames.new(frame*FRAMES_SPACING)
+        
+        # then copy content from current frame to next available frame
         else:
             gp_layer.frames.copy(gp_frame) # copy the content of the given frame to the next available timeline slot.
 

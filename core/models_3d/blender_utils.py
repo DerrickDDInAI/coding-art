@@ -2,6 +2,8 @@
 Blender utilities
 Sources:
     - [GitHub - blender_plus_python/video_grid/video_grid_done.py](https://github.com/CGArtPython/blender_plus_python/blob/main/video_grid/video_grid_done.py)
+    - [YouTube - remove orphan blocks in Blender](https://youtu.be/3rNqVPtbhzc?t=149)
+    - [YouTube - clean scene in Blender](https://youtu.be/3rNqVPtbhzc)
     - [Blender.stackexchange - How to add text in blender using python](https://blender.stackexchange.com/questions/163487/how-to-add-text-in-blender-using-python)
 """
 # =====================================================================
@@ -10,7 +12,9 @@ Sources:
 
 # import internal modules
 # from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
-
+import time
+from random import seed
+from math import radians, degrees
 
 # import 3rd-party modules
 import bpy
@@ -186,14 +190,15 @@ def set_output_properties(
     scene.render.fps = fps
     scene.frame_start = frame_start
     scene.frame_end = frame_end
+    scene.frame_current = scene.frame_start
 
-    bpy.context.scene.render.filepath = filepath
-    bpy.context.scene.render.image_settings.file_format = file_format
+    scene.render.filepath = filepath
+    scene.render.image_settings.file_format = file_format
 
     # if video render, set output video properties
     if file_format == "FFMPEG":
-        bpy.context.scene.render.ffmpeg.format = 'MPEG4'
-        bpy.context.scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'
+        scene.render.ffmpeg.format = 'MPEG4'
+        scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'
 
 
 def set_default_world(color_rgba=(0,0,0,1)):
@@ -206,7 +211,9 @@ def set_default_world(color_rgba=(0,0,0,1)):
 def set_default_settings(
     eevee_render_kwargs=None, 
     output_properties_kwargs=None, 
-    world_kwargs=None
+    world_kwargs=None,
+    camera_kwargs=None,
+    light_kwargs=None
     ):
     """
     Function to set default settings
@@ -215,10 +222,17 @@ def set_default_settings(
     if eevee_render_kwargs is None: eevee_render_kwargs = {}
     if output_properties_kwargs is None: output_properties_kwargs = {}
     if world_kwargs is None: world_kwargs = {}
+    if camera_kwargs is None: camera_kwargs = {}
+    if light_kwargs is None: light_kwargs = {}
 
+    # set default settings
     set_default_eevee_render_settings(**eevee_render_kwargs)
     set_output_properties(**output_properties_kwargs)
     set_default_world(**world_kwargs)
+
+    # add camera and light objects
+    add_camera(**camera_kwargs)
+    add_light(**light_kwargs)
 
 
 # def set_scene_frame_range(scene, frame_start = 0, frame_end = 30):
@@ -326,7 +340,7 @@ def add_shader(material_name, type='ShaderNodeBsdfPrincipled', settings_dict=Non
 
     # create output node and set node location
     output_node = nodes.new(type='ShaderNodeOutputMaterial')
-    output_node.location = 400,0 # set node location
+    output_node.location = 400, 0 # set node location
 
     # create shader
     shader = nodes.new(type=type)
@@ -342,6 +356,130 @@ def add_shader(material_name, type='ShaderNodeBsdfPrincipled', settings_dict=Non
 
     return material, shader
 
+
+def set_time_seed():
+    """
+    Sets random seed based on the time
+    and copies the seed into the clipboard
+    """
+    time_seed = time.time()
+    print(f"seed: {time_seed}")
+    seed(time_seed)
+
+    # add the seed value to your clipboard
+    bpy.context.window_manager.clipboard = str(time_seed)
+
+    return time_seed
+
+
+def add_empty(name="empty.cntrl"):
+    """
+    Function to add empty object
+    """
+
+    # add empty object
+    bpy.ops.object.empty_add(type="PLAIN_AXES", align="WORLD")
+
+    # get active object: empty object
+    empty_obj = bpy.context.active_object
+    
+    # set empty object name
+    empty_obj.name = name
+
+    return empty_obj
+
+
+def track_empty(obj):
+    """
+    Function to add empty and add a constraint to the object:
+    'Track To' this empty
+    """
+
+    # add empty object
+    empty_obj = add_empty(name=f"empty.tracked_by.{obj.name}")
+
+    # activate tracking object
+    activate_object(obj)
+
+    # add constraint: 'track to'
+    bpy.ops.object.constraint_add(type="TRACK_TO")
+
+    # set constraint target
+    bpy.context.object.constraints["Track To"].target = empty_obj
+
+    return empty_obj
+
+
+def add_camera(
+    location=(0,0,0), rotation=(1.10871, 0.0132652, 1.14827), 
+    focal_length=50, 
+    passepartout_alpha=0.5,
+    track_to_empty=False):
+    """
+    create and setup the camera
+    """
+
+    # add camera
+    bpy.ops.object.camera_add(location=location, rotation=rotation)
+
+    # get active object: camera
+    camera_obj = bpy.context.active_object
+
+    # set camera as "active camera" in the scene
+    bpy.context.scene.camera = camera_obj
+
+    # set focal Length of camera
+    camera_obj.data.lens = focal_length
+
+    # set passepartout:
+    # darkens area outside of camera’s field of view
+    camera_obj.data.passepartout_alpha = passepartout_alpha
+
+    # if track to empty true, add a 'track to' constraint to camera
+    if track_to_empty:
+        track_empty(camera_obj)
+
+    return camera_obj
+
+
+def add_light(
+    type="SUN",
+    radius=1,
+    location=(4.07625, 1.00545, 5.90386), rotation=(0, 0.6042797269578053, 0.24183317022218467),
+    energy=2,
+    specular_factor=0,
+    use_shadow=True
+    ):
+    """
+    Function to add light object
+    """
+
+    # add light object
+    bpy.ops.object.light_add(type=type, radius=radius, location=location, rotation=rotation)
+
+    # get active object: sun
+    light_obj = bpy.context.active_object
+
+    # set light properties
+    light_obj.data.energy = energy
+    light_obj.data.specular_factor = specular_factor
+    light_obj.data.use_shadow = use_shadow
+
+    return light_obj
+
+
+def enable_import_images_as_planes():
+    """
+    Function to enable import images as planes
+    """
+    
+    # check addon state
+    loaded_default, loaded_state = addon_utils.check("io_import_images_as_planes")
+
+    # if addon disabled, enable it 
+    if not loaded_state:
+        addon_utils.enable("io_import_images_as_planes")
+
 # =====================================================================
 # Test functions
 # =====================================================================
@@ -355,6 +493,7 @@ if __name__ == "__main__":
     clean_scene()
     set_default_settings()
 
+    enable_import_images_as_planes()
 
     parent_collection = create_collection("Collection")
     collection = create_collection("some_collection_name", parent_collection)

@@ -1,8 +1,8 @@
 """
-# Python script to plot and animate 3D bars of sport data
+# Python script to plot and animate a grid of 3D bars of sport data
 ## Sources:
     - [Blender.stackexchange - How to add text in blender using python](https://blender.stackexchange.com/questions/163487/how-to-add-text-in-blender-using-python)
-    - [How to install Python modules in Blender using pip](http://www.codeplastic.com/2019/03/12/how-to-install-python-modules-in-blender/)
+    - [How to install Python modules in  using pip](http://www.codeplastic.com/2019/03/12/how-to-install-python-modules-in-blender/)
 
 ## toDo: 
 - fix create x and y label collections
@@ -18,7 +18,7 @@
     * go to folder and open terminal at folder
     * run: "./bin/python3.10 -m pip install <some_package>" to install dependencies
     (e.g.: "./bin/python3.10 -m pip install scipy")
-    
+
 - to install opencv:
     * main opencv: pip install opencv-python
     * contrib package for the extra features: pip install opencv-contrib-python
@@ -75,42 +75,46 @@ def get_heartrate_sin_wave(heartrate_per_min, fps, nb_frames):
     nb_heartrate_max_values = heartrate_per_sec * nb_seconds * 2 * np.pi
 
     # get x and y sinusoid values
-    x = np.arange(0,nb_heartrate_max_values,nb_heartrate_max_values/nb_frames)   # start, stop, step
-    y = (np.sin(x) + 1)/2 # translate and normalize y values to have a sinusoid ranging from 0 to 1
-    
+    try:
+        x = np.arange(0,nb_heartrate_max_values,nb_heartrate_max_values/nb_frames)   # start, stop, step
+        y = (np.sin(x) + 1)/2 # translate and normalize y values to have a sinusoid ranging from 0 to 1
+    except:
+        y = np.ones(nb_frames) * heartrate_per_sec
     return y
 
 def create_animated_bar(
-    ys, x,
+    zs, x, xys,
     bar_collection_name,
-    bar_center_location_x,
     bar_default_size,
     # nb_frames=30, 
     frame_start = 0,
     frame_end = 30,
     fps=30,
     show_labels=True,
-    y_label_collection_name= "Y_label_collection",
+    z_label_collection_name= "Z_label_collection",
     x_label_collection_name="X_label_collection",
     parent_label_collection_name="Label_collection",
-    y_label_prefix="",
+    z_label_prefix="",
     z_dict=None,
     wireframe=False
     ):
     """
     Function to animate a bar (for a barplot)
 
-    ys with "s" because there could be multiple y values for one x
+    zs with "s" because there could be multiple z values for one x
     * x label texts are fixed.
-    * y label texts change as the bar grows in the z axis at each frame
+    * z label texts change as the bar grows in the z axis at each frame
     """
 
     # set initial values
     nb_frames = frame_end - frame_start
-    total_y = 0.00
-    previous_y_linspace = np.zeros(nb_frames)
+    total_z = 0.00
+    previous_z_linspace = np.zeros(nb_frames)
     label_location_offset = 0.4
-    if len(y_label_prefix) > 0: y_label_prefix = f" {y_label_prefix}"
+    if len(z_label_prefix) > 0: z_label_prefix = f" {z_label_prefix}"
+
+    bar_center_location_x, bar_center_location_y = xys.iloc[0][1:-1].split(",")
+    bar_center_location_x, bar_center_location_y = float(bar_center_location_x),float(bar_center_location_y)
 
     ## 1. Add labels if enabled
 
@@ -128,22 +132,22 @@ def create_animated_bar(
         if parent_label_collection is None:
             parent_label_collection = blender_utils.create_collection(parent_label_collection_name, bpy.data.collections['Collection'])
 
-        # get x and y label collections if they exist or else none
+        # get x and z label collections if they exist or else none
         x_label_collection = bpy.data.collections.get(x_label_collection_name)
-        y_label_collection = bpy.data.collections.get(y_label_collection_name)
+        z_label_collection = bpy.data.collections.get(z_label_collection_name)
 
-        # create x and y label collections in their parent collection if they don't exist
+        # create x and z label collections in their parent collection if they don't exist
         if x_label_collection is None:
             x_label_collection = blender_utils.create_collection(x_label_collection_name, parent_label_collection)
         
-        if y_label_collection is None:
-            y_label_collection = blender_utils.create_collection(y_label_collection_name, parent_label_collection)
+        if z_label_collection is None:
+            z_label_collection = blender_utils.create_collection(z_label_collection_name, parent_label_collection)
 
         # add x label text and set transform properties
         x_text_obj = blender_utils.add_text(x, collection=parent_label_collection)
         x_text_obj.rotation_euler[0] = 1.5708 # = 90°
         x_text_obj.scale = (label_scale, label_scale, label_scale)
-        x_text_obj.location = (bar_center_location_x - bar_middle_size, -bar_middle_size, -label_location_offset)
+        x_text_obj.location = (bar_center_location_x - bar_middle_size, bar_center_location_y - bar_middle_size, -label_location_offset)
 
         # # activate x label text object
         # bpy.context.view_layer.objects.active = x_text_obj
@@ -166,19 +170,19 @@ def create_animated_bar(
         # apply the material to cube object
         x_text_obj.data.materials.append(material)
         
-        # add y label text and set transform properties (add initial y text that will be updated at each frame)
-        y_text_obj = blender_utils.add_text(f"{total_y:.2f}{y_label_prefix}", collection=parent_label_collection)
-        y_text_obj.rotation_euler[0] = 1.5708 # 90°
-        y_text_obj.scale = (label_scale, label_scale, label_scale)
-        y_text_obj.location = (bar_center_location_x - bar_middle_size, -bar_middle_size, total_y+label_location_offset)
+        # add y label text and set transform properties (add initial z text that will be updated at each frame)
+        z_text_obj = blender_utils.add_text(f"{total_z:.2f}{z_label_prefix}", collection=parent_label_collection)
+        z_text_obj.rotation_euler[0] = 1.5708 # 90°
+        z_text_obj.scale = (label_scale, label_scale, label_scale)
+        z_text_obj.location = (bar_center_location_x - bar_middle_size, bar_center_location_y - bar_middle_size, total_z+label_location_offset)
 
         # activate y label text object
-        # bpy.context.view_layer.objects.active = y_text_obj
+        # bpy.context.view_layer.objects.active = z_text_obj
 
-        # add modifier to y label
+        # add modifier to z label
         # bpy.ops.object.modifier_add(type='SOLIDIFY')
         # bpy.context.object.modifiers["Solidify"].thickness = 0.27
-        modifier = y_text_obj.modifiers.new(name="solidify", type="SOLIDIFY")
+        modifier = z_text_obj.modifiers.new(name="solidify", type="SOLIDIFY")
         modifier.thickness = 0.27
         
         # add material shader with specified settings
@@ -188,10 +192,10 @@ def create_animated_bar(
             'Color': (r, g, b, a),
             'Strength': 3
         }
-        material, shader = blender_utils.add_shader(material_name=f"y_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+        material, shader = blender_utils.add_shader(material_name=f"z_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
 
         # apply the material to cube object
-        y_text_obj.data.materials.append(material)
+        z_text_obj.data.materials.append(material)
 
     
     ## 2. Create bar
@@ -208,17 +212,25 @@ def create_animated_bar(
     layer_collection = bpy.context.view_layer.layer_collection.children['Collection'].children[bar_collection_name]
     bpy.context.view_layer.active_layer_collection = layer_collection
 
-    # iterate over y values
-    for z_idx, y in enumerate(ys):
+    # iterate over z values
+    for z_idx, z in enumerate(zs):
+
+        if pd.isna(z): z = 0.0001
 
         # add cube
-        bpy.ops.mesh.primitive_cube_add(size=bar_default_size, enter_editmode=False, align='WORLD', location=(bar_center_location_x, 0, 0), scale=(bar_default_size, bar_default_size, bar_default_size))
+        bpy.ops.mesh.primitive_cube_add(size=bar_default_size, enter_editmode=False, align='WORLD', location=(bar_center_location_x, bar_center_location_y, 0), scale=(bar_default_size, bar_default_size, bar_default_size))
 
         # get cube object (current active object as it has just been created)
         cube_obj = bpy.context.active_object
 
         # if z_dict with values for modifier and material properties
         if z_dict is not None:
+
+            modifier_value = z_dict["modifier"].iloc[z_idx]
+            if pd.isna(modifier_value): modifier_value = 0.0001
+
+            material_value = z_dict["material"].iloc[z_idx]
+            if pd.isna(material_value): material_value = 0.0001
 
             # add uv sphere to use for particle system
             bpy.ops.mesh.primitive_uv_sphere_add(enter_editmode=False, align='WORLD', location=(-10 - z_idx, -10, -10), scale=(1, 1, 1))
@@ -234,7 +246,7 @@ def create_animated_bar(
 
             # set settings
             psys.settings.type = 'EMITTER'
-            psys.settings.count = int(z_dict["modifier"].iloc[z_idx])
+            psys.settings.count = int(modifier_value)
             psys.settings.frame_start = frame_start
             psys.settings.frame_end = frame_end
             psys.settings.lifetime = nb_frames
@@ -246,19 +258,19 @@ def create_animated_bar(
             psys.settings.particle_size = 0.033
 
             #input
-            (h, s, v) = (z_dict["material"].iloc[z_idx], 244, 85)
+            (h, s, v) = (material_value, 244, 85)
             #normalize
             (h, s, v) = (h / 179, s / 255, v / 255)
             #convert to RGB
             (r, g, b) = colorsys.hsv_to_rgb(h, s, v)
 
             # add material shader with specified settings
-            # r = (z_dict["material"].iloc[z_idx]/200)*255
+            # r = (material_value/200)*255
             # r,g,b = np.array((r,215,4))/255
             a = 1
             settings_dict = {
                 'Color': (r, g, b, a),
-                # 'Strength': (z_dict["material"].iloc[z_idx]/100)**3
+                # 'Strength': (material_value/100)**3
             }
             ps_material, ps_shader = blender_utils.add_shader(material_name=f"sphere_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
 
@@ -266,9 +278,9 @@ def create_animated_bar(
             sphere_obj.data.materials.append(ps_material)
 
             # get simulated heartrate values
-            # simulated_heartrates = simulate_heartrate.simulate_heartbeat([z_dict["material"].iloc[z_idx]], capture_length=int(np.max([1, nb_frames * 30])))
+            # simulated_heartrates = simulate_heartrate.simulate_heartbeat([material_value], capture_length=int(np.max([1, nb_frames * 30])))
 
-            # heartrate_per_sec = z_dict["material"].iloc[z_idx] / 60
+            # heartrate_per_sec = material_value / 60
             # heartrate_step_for_animation = int(fps/heartrate_per_sec)
             # heatrate_values = np.zeros(shape=(nb_frames//heartrate_step_for_animation, heartrate_step_for_animation))
             # # heatrate_values[::heartrate_step_for_animation] = 1
@@ -288,7 +300,7 @@ def create_animated_bar(
             # remaining_heartrate_values = first_half_step_values[:modulo_hr]
             # heatrate_values = np.append(heatrate_values, remaining_heartrate_values)
 
-            heatrate_values = get_heartrate_sin_wave(z_dict["material"].iloc[z_idx], fps=fps, nb_frames=nb_frames)
+            heatrate_values = get_heartrate_sin_wave(material_value, fps=fps, nb_frames=nb_frames)
         
 
         # add wireframe modifier
@@ -308,16 +320,16 @@ def create_animated_bar(
         cube_obj.data.materials.append(material)
 
 
-        # get n (nb of frames) evenly spaced y samples
-        y_linspace = np.linspace(0, y, nb_frames)
+        # get n (nb of frames) evenly spaced z samples
+        z_linspace = np.linspace(0, z, nb_frames)
  
-        # iterate over y samples
-        for frame_nb, sample_y in enumerate(y_linspace):
+        # iterate over z samples
+        for frame_nb, sample_z in enumerate(z_linspace):
 
             # set cube transform properties and add corresponding keyframes
-            cube_obj.location[2] = previous_y_linspace[frame_nb] + sample_y/2
+            cube_obj.location[2] = previous_z_linspace[frame_nb] + sample_z/2
             cube_obj.keyframe_insert(data_path="location", frame=frame_nb)
-            cube_obj.scale = (1, 1, sample_y)
+            cube_obj.scale = (1, 1, sample_z)
             cube_obj.keyframe_insert(data_path="scale", frame=frame_nb)
 
             # set material value with values from simulated hearbeat and add keyframe
@@ -325,11 +337,11 @@ def create_animated_bar(
             ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].default_value = heatrate_values[frame_nb]
             ps_material.node_tree.nodes[ps_shader.name].inputs["Strength"].keyframe_insert("default_value", frame=frame_nb)
         
-        # add y samples to previous y samples to get the total y values per frame
-        previous_y_linspace += y_linspace
+        # add y samples to previous z samples to get the total z values per frame
+        previous_z_linspace += z_linspace
 
     
-    ## 3. Update y labels if show labels enabled
+    ## 3. Update z labels if show labels enabled
 
     # if show labels enabled
     if show_labels:
@@ -338,17 +350,17 @@ def create_animated_bar(
         for frame_nb in range(nb_frames):
 
             # set y label text transform properties and add corresponding keyframes
-            y_text_obj.location[2] = previous_y_linspace[frame_nb] + label_location_offset
-            y_text_obj.keyframe_insert(data_path="location", frame=frame_nb)
+            z_text_obj.location[2] = previous_z_linspace[frame_nb] + label_location_offset
+            z_text_obj.keyframe_insert(data_path="location", frame=frame_nb)
 
 
-        previous_y_linspace = [f"{y:.2f} {y_label_prefix}" for y in previous_y_linspace]
+        previous_z_linspace = [f"{y:.2f} {z_label_prefix}" for y in previous_z_linspace]
 
         # update text
         @persistent
         def update(scene):
-            # blender_utils.update_text_handler(scene, y_text_obj, np.around(previous_y_linspace, decimals=2))
-            blender_utils.update_text_handler(scene, y_text_obj, previous_y_linspace)
+            # blender_utils.update_text_handler(scene, z_text_obj, np.around(previous_z_linspace, decimals=2))
+            blender_utils.update_text_handler(scene, z_text_obj, previous_z_linspace)
         
         bpy.app.handlers.frame_change_pre.append(update)
 
@@ -397,15 +409,17 @@ parent_collection = blender_utils.create_collection("Collection")
 # =====================================================================
 
 # read csv file into pandas dataframe
-df = pd.read_csv("/Users/derrickvanfrausum/BeCode_AI/git-repos/coding-art/core/assets/data/garmin_data/football_1_year_cleaned.csv")
+df = pd.read_csv("/Users/derrickvanfrausum/BeCode_AI/git-repos/coding-art/core/assets/data/garmin_data/Activities_20210304_20221027_cleaned_grouped_all_days.csv")
 
 # get list of dates (without duplicates) and sort it
-dates = df["Date_yy-mm-dd"].unique()[:3]
+# dates = df["Date_yy-mm-dd"].unique()[:3]
+dates = df["Date_yy-mm-dd"].unique()
 dates.sort()
 
 # normalize calories_series to range of hue values [0,179] (toDo: add normalization to preprocessing data)
 df.Calories = data_utils.normalize_between_range(df.Calories, 0, 179)
 df["Avg HR"] = data_utils.normalize_between_range(df["Avg HR"], 0, 179)
+df["Time"] = data_utils.normalize_between_range(df["Time"], 0,20)
 
 # =====================================================================
 # Create animation
@@ -414,8 +428,12 @@ df["Avg HR"] = data_utils.normalize_between_range(df["Avg HR"], 0, 179)
 # iterate over activity date
 for bar_center_location_x, activity_date in enumerate(dates):
 
-    # get activities for current date
-    activities = df.loc[df["Date_yy-mm-dd"] == activity_date, "Distance"]
+    # get activities times for current date
+    activities_times = df.loc[df["Date_yy-mm-dd"] == activity_date, "Time"]
+
+    # get bar xy location
+    xys = df.loc[df["Date_yy-mm-dd"] == activity_date, "grid_coords_xy"]
+
     
     # get average heart rates and calories for current date (to use their values as modifier or material properties)
     average_hr_series = df.loc[df["Date_yy-mm-dd"] == activity_date, "Avg HR"]
@@ -429,19 +447,18 @@ for bar_center_location_x, activity_date in enumerate(dates):
 
     # create animated bar
     create_animated_bar(
-        activities.values, activity_date, 
+        activities_times.values, activity_date, xys,
         bar_collection_name="Cube_collection",
-        bar_center_location_x=bar_center_location_x,
         bar_default_size=CUBE_SIZE,
         # nb_frames=30, 
         frame_start=FRAME_START,
         frame_end=FRAME_END,
         fps=30,
         show_labels=True,
-        y_label_collection_name="Y_label_collection",
+        z_label_collection_name="Z_label_collection",
         x_label_collection_name="X_label_collection",
         parent_label_collection_name="Label_collection",
-        y_label_prefix="km",
+        z_label_prefix="s",
         z_dict=z_dict,
         wireframe=True
         )

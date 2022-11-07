@@ -158,17 +158,8 @@ def create_animated_bar(
         modifier = x_text_obj.modifiers.new(name="solidify", type="SOLIDIFY")
         modifier.thickness = 0.27
 
-        # add material shader with specified settings
-        r,g,b = np.array((222,183,40))/255
-        a = 1
-        settings_dict = {
-            'Color': (r, g, b, a),
-            'Strength': 3
-        }
-        material, shader = blender_utils.add_shader(material_name=f"x_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
-
         # apply the material to cube object
-        x_text_obj.data.materials.append(material)
+        x_text_obj.data.materials.append(x_text_material)
         
         # add y label text and set transform properties (add initial z text that will be updated at each frame)
         z_text_obj = blender_utils.add_text(f"{total_z:.2f}{z_label_prefix}", collection=parent_label_collection)
@@ -185,17 +176,8 @@ def create_animated_bar(
         modifier = z_text_obj.modifiers.new(name="solidify", type="SOLIDIFY")
         modifier.thickness = 0.27
         
-        # add material shader with specified settings
-        r,g,b = np.array((221,17,17))/255
-        a = 1
-        settings_dict = {
-            'Color': (r, g, b, a),
-            'Strength': 3
-        }
-        material, shader = blender_utils.add_shader(material_name=f"z_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
-
         # apply the material to cube object
-        z_text_obj.data.materials.append(material)
+        z_text_obj.data.materials.append(z_text_material)
 
     
     ## 2. Create bar
@@ -215,8 +197,6 @@ def create_animated_bar(
     # iterate over z values
     for z_idx, z in enumerate(zs):
 
-        if pd.isna(z): z = 0.0001
-
         # add cube
         bpy.ops.mesh.primitive_cube_add(size=bar_default_size, enter_editmode=False, align='WORLD', location=(bar_center_location_x, bar_center_location_y, 0), scale=(bar_default_size, bar_default_size, bar_default_size))
 
@@ -226,11 +206,7 @@ def create_animated_bar(
         # if z_dict with values for modifier and material properties
         if z_dict is not None:
 
-            modifier_value = z_dict["modifier"].iloc[z_idx]
-            if pd.isna(modifier_value): modifier_value = 0.0001
-
             material_value = z_dict["material"].iloc[z_idx]
-            if pd.isna(material_value): material_value = 0.0001
 
             # add uv sphere to use for particle system
             bpy.ops.mesh.primitive_uv_sphere_add(enter_editmode=False, align='WORLD', location=(-10 - z_idx, -10, -10), scale=(1, 1, 1))
@@ -246,7 +222,7 @@ def create_animated_bar(
 
             # set settings
             psys.settings.type = 'EMITTER'
-            psys.settings.count = int(modifier_value)
+            psys.settings.count = int(material_value)
             psys.settings.frame_start = frame_start
             psys.settings.frame_end = frame_end
             psys.settings.lifetime = nb_frames
@@ -257,22 +233,8 @@ def create_animated_bar(
             psys.settings.instance_object = sphere_obj
             psys.settings.particle_size = 0.033
 
-            #input
-            (h, s, v) = (material_value, 244, 85)
-            #normalize
-            (h, s, v) = (h / 179, s / 255, v / 255)
-            #convert to RGB
-            (r, g, b) = colorsys.hsv_to_rgb(h, s, v)
-
-            # add material shader with specified settings
-            # r = (material_value/200)*255
-            # r,g,b = np.array((r,215,4))/255
-            a = 1
-            settings_dict = {
-                'Color': (r, g, b, a),
-                # 'Strength': (material_value/100)**3
-            }
-            ps_material, ps_shader = blender_utils.add_shader(material_name=f"sphere_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+           
+            ps_material, ps_shader = average_hrs_dict[material_value]
 
             # apply the material to cube object
             sphere_obj.data.materials.append(ps_material)
@@ -300,21 +262,16 @@ def create_animated_bar(
             # remaining_heartrate_values = first_half_step_values[:modulo_hr]
             # heatrate_values = np.append(heatrate_values, remaining_heartrate_values)
 
-            heatrate_values = get_heartrate_sin_wave(material_value, fps=fps, nb_frames=nb_frames)
+            heatrate_values = get_heartrate_sin_wave(z, fps=fps, nb_frames=nb_frames)
         
 
         # add wireframe modifier
         if wireframe:
             modifier = cube_obj.modifiers.new(name="wireframe", type="WIREFRAME")
-
-        # add material shader with specified settings
-        r,g,b = np.array((7,26,222))/255
-        a = 1
-        settings_dict = {
-            'Color': (r, g, b, a),
-            'Strength': 20
-        }
-        material, shader = blender_utils.add_shader(material_name=f"cube_obj_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+        
+        activity_type = z_dict["activity_type"].iloc[z_idx]
+        material, shader = activity_colors_dict[activity_type]
+        
 
         # apply the material to cube object
         cube_obj.data.materials.append(material)
@@ -421,6 +378,102 @@ df.Calories = data_utils.normalize_between_range(df.Calories, 0, 179)
 df["Avg HR"] = data_utils.normalize_between_range(df["Avg HR"], 0, 179)
 df["Time"] = data_utils.normalize_between_range(df["Time"], 0,20)
 
+# replace nan values by very small number
+df[["Time","Avg HR", "Calories"]] = df[["Time","Avg HR", "Calories"]].fillna(0.0001)
+
+# =====================================================================
+# Create materials and shaders
+# =====================================================================
+
+# create x and z text materials and shaders
+# add material shader with specified settings
+r,g,b = np.array((222,183,40))/255
+a = 1
+settings_dict = {
+    'Color': (r, g, b, a),
+    'Strength': 3
+}
+x_text_material, x_text_shader = blender_utils.add_shader(material_name=f"x_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+
+# add material shader with specified settings
+r,g,b = np.array((221,17,17))/255
+a = 1
+settings_dict = {
+    'Color': (r, g, b, a),
+    'Strength': 3
+}
+z_text_material, z_text_shader = blender_utils.add_shader(material_name=f"z_text_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+
+
+# get distinct activity types
+# activity_types = df["Activity Type"].unique()
+activity_types = [np.nan, 'Breathwork', 'Cycling', 'Strength Training', 'Tennis', 'Football',
+       'Pool Swimming', 'Cardio', 'Running', 'Yoga', 'Pilates']
+
+# set rgb colors to map to each activity type
+activity_colors_rgb = np.array([
+    [10, 10, 10],
+    [128, 128, 128],
+    [253, 218, 13],
+    [81, 65, 79],
+    [169, 118, 93],
+    [126, 175,52],
+    [4, 55, 242],
+    [159, 43, 104],
+    [250, 160, 160],
+    [226, 223, 210],
+    [72, 50, 72],
+])
+
+# map activity type to each color
+activity_colors_dict = dict(zip(activity_types, activity_colors_rgb))
+
+for activity_type, activity_color in activity_colors_dict.items():
+
+    # add material shader with specified settings
+    r, g, b = activity_color/255
+    a = 1
+    settings_dict = {
+        'Color': (r, g, b, a),
+        'Strength': 20
+    }
+    material, shader = blender_utils.add_shader(material_name=f"material_{activity_type}", type="ShaderNodeEmission", settings_dict=settings_dict)
+    
+    # update dict with material and shader
+    activity_colors_dict[activity_type] = (material, shader)
+
+
+# create empty dict to store materials and shaders for each average heartrate value
+average_hrs_dict = {}
+
+# get distinct average heartrate
+average_hrs = df["Avg HR"].unique()
+
+# create and map a material and shader to each average heartrate value
+for average_hr in average_hrs:
+
+    # convert rgb to hsv
+    h, s, v = (average_hr, 244, 85)
+
+    # normalize hsv
+    h, s, v = (h / 179, s / 255, v / 255)
+
+    # convert back to rgb
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+
+    # add material shader with specified settings
+    a = 1
+    settings_dict = {
+        'Color': (r, g, b, a),
+        # 'Strength': (material_value/100)**3
+    }
+    ps_material, ps_shader = blender_utils.add_shader(material_name=f"sphere_material_{uuid4()}", type="ShaderNodeEmission", settings_dict=settings_dict)
+
+    # update dict with material and shader
+    average_hrs_dict[average_hr] = (ps_material, ps_shader)
+
+    
+
 # =====================================================================
 # Create animation
 # =====================================================================
@@ -433,17 +486,18 @@ for bar_center_location_x, activity_date in enumerate(dates):
 
     # get bar xy location
     xys = df.loc[df["Date_yy-mm-dd"] == activity_date, "grid_coords_xy"]
-
     
-    # get average heart rates and calories for current date (to use their values as modifier or material properties)
+    # get activity type, 
+    # average heart rates and calories for current date (to use their values as modifier or material properties)
+    activity_types_series = df.loc[df["Date_yy-mm-dd"] == activity_date, "Activity Type"]
     average_hr_series = df.loc[df["Date_yy-mm-dd"] == activity_date, "Avg HR"]
     calories_series = df.loc[df["Date_yy-mm-dd"] == activity_date, "Calories"]
 
     z_dict = {
+        "activity_type": activity_types_series,
         "material": average_hr_series,
         "modifier": calories_series
     }
-    
 
     # create animated bar
     create_animated_bar(
@@ -458,7 +512,7 @@ for bar_center_location_x, activity_date in enumerate(dates):
         z_label_collection_name="Z_label_collection",
         x_label_collection_name="X_label_collection",
         parent_label_collection_name="Label_collection",
-        z_label_prefix="s",
+        z_label_prefix="min",
         z_dict=z_dict,
         wireframe=True
         )

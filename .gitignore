@@ -15,6 +15,9 @@
 */utils/face_detector/models
 */assets/3d
 
+# video
+*.mp4
+
 # api key
 */assets/pexels_api_key
 

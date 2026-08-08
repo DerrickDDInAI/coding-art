@@ -1,10 +1,39 @@
-"""
-Program to define a class for Mandelbrot sets
+"""The Mandelbrot set: deciding whether one point of the plane is "inside" it.
 
-Sources: 
-- derived from https://realpython.com/mandelbrot-set-python/
+The idea in one paragraph
+------------------------
+Take a point ``c`` on the plane and read it as a complex number. Start at
+``z = 0`` and repeat ``z = z**2 + c`` over and over. For some values of ``c``,
+``z`` stays small forever; for others it shoots off to infinity. The Mandelbrot
+set is simply *the set of points that stay small*. Its famous shape is not drawn
+by any formula — it falls out of running that one line of arithmetic on every
+pixel.
 
-ToDo: speed up execution by using numpy
+Why this belongs in a computer-vision repo
+------------------------------------------
+It is the cleanest possible example of the pattern behind every project here:
+**map each pixel to a number, then map that number to a colour.** Change the
+mapping and you change the image. Everything downstream — colour maps, contrast
+curves, anti-aliasing — behaves exactly as it does on a photograph.
+
+Two practical tricks are implemented below, and both are general image-processing
+techniques rather than fractal trivia:
+
+* **The escape radius.** Once ``|z| > 2`` the sequence provably diverges, so we
+  can stop early instead of iterating forever. A larger radius costs a little
+  more work but makes the smoothing below more accurate.
+* **Smoothing (fractional escape counts).** The raw iteration count is a whole
+  number, so colouring by it produces visible concentric rings — *colour
+  banding*, the same artefact you see in a low-bit-depth photo gradient. The
+  logarithm below interpolates *between* iteration counts and turns those steps
+  into a continuous gradient. This is the same problem, and the same class of
+  fix, as dithering a photograph.
+
+Derived from https://realpython.com/mandelbrot-set-python/
+
+ToDo: vectorise with NumPy — iterating in pure Python costs one interpreter loop
+per pixel per iteration, which is the reason a large render takes minutes.
+``core/fractals/create_fractals.ipynb`` shows the array-based version.
 """
 
 # =====================================================================
@@ -12,109 +41,87 @@ ToDo: speed up execution by using numpy
 # =====================================================================
 
 # import internal modules
-from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union
 from dataclasses import dataclass
 from math import log
-
-# import 3rd-party modules
-
-# import local modules
-
+from typing import Union
 
 # =====================================================================
 # Define classes
 # =====================================================================
 
+
 @dataclass
 class MandelbrotSet:
-    """
-    dataclass to define a Mandelbrot set
+    """The Mandelbrot set, sampled at a given precision.
 
     Attributes:
-    * escape_radius: the math formula below to smooth out banding artifacts
-    is based on the assumption that the escape radius approaches infinity, so it can't be hardcoded anymore.
+    * max_iterations: how many times to apply ``z = z**2 + c`` before declaring a
+      point "stable". This is the quality/speed dial: higher values reveal more
+      detail along the boundary but cost proportionally more time. Note this
+      makes every render an *approximation* — a point that would escape on
+      iteration 5 000 is indistinguishable from one that never escapes when you
+      stop at 100.
+    * escape_radius: the magnitude above which we call the sequence divergent.
+      Mathematically 2.0 is enough, but the smoothing formula in
+      :meth:`escape_count` assumes an escape radius approaching infinity, so
+      raising it (100, 1000) makes the smooth gradient noticeably cleaner.
     """
+
     max_iterations: int
     escape_radius: float = 2.0
 
-    # def __contains__(self, c: complex) -> bool:
-    #     """
-    #     Special method to allow to leverage the use of in and not in operator.
-
-    #     Logic:
-    #     checks if a candidate value (complex number c) is stable:
-    #     stable if the magnitude Zn resulting from the recursive formula exceeds the radius of 2 after n iterations
-    #     This recursive formula gives the Mandelbrot sequence.
-
-    #     The absolute value of a complex number, a+bi (also called the modulus) is defined as the distance between the origin (0,0) and the point (a,b) in the complex plane.
-
-    #     By default z = 0 as in a mandelbrot sequence, the first element is always 0
-
-    #     Note: this function works on individual numbers rather than a whole matrix
-    #     """
-    #     # in mandelbrot sequence, the first element is always 0
-    #     z = 0
-
-    #     # compute sequence over n iterations
-    #     for _ in range(self.max_iterations):
-    #         z = z ** 2 + c
-
-    #         # if radius of z exceeds 2, return false (i.e breaking the loop as soon as magnitude of z exceeds threshold)
-    #         if abs(z) > 2:
-    #             return False
-
-    #     # return true if after max iterations, radius of z hasn't exceeded 2
-    #     return True
-
     def __contains__(self, c: complex) -> bool:
-        """
-        Special method to allow to leverage the use of in and not in operator
+        """Allow ``c in mandelbrot_set``.
 
-        Logic:
-        Candidate value is considered stable if stability equals to 1, 
-        i.e the sequence didn't diverge after max number of iterations
-
-        Note: here, the iterative approach to test the stability of a given point is actually an approximation of the actual Mandelbrot set.
-        As for some points, more iterations than the given maximum number of iterations could be required to know if they're stable or not, which may not be feasible in practice.
-
+        Implementing ``__contains__`` is what makes the ``in`` operator work on a
+        custom class. A point is "in" the set when it never escaped, i.e. when
+        its stability is exactly 1.
         """
         return self.stability(c) == 1
 
-    def escape_count(self, c: complex, smooth=False) -> Union[int,float]:
-        """
-        Function to get the escape count, i.e the number of iterations it takes to detect divergence
+    def escape_count(self, c: complex, smooth: bool = False) -> Union[int, float]:
+        """Number of iterations it took for ``c`` to diverge.
+
+        Returns ``max_iterations`` if it never did.
 
         Arguments:
-        * smooth: boolean value to decide to return fractional escape count 
-        => to get rid of color banding outside the Mandelbrot set (happening due to discrete escape count).
-        -> by interpolating the intermediate escape count
+        * smooth: return a *fractional* count instead of a whole number, which
+          removes the colour banding described in the module docstring.
 
+        The smoothing formula, unpacked: when the sequence escapes we know it
+        crossed the radius *somewhere between* the previous iteration and this
+        one. Because ``z`` is being squared each step, its magnitude grows
+        doubly-exponentially, so ``log(log(|z|)) / log(2)`` recovers roughly how
+        far past the threshold we overshot — and subtracting it interpolates the
+        count back to where the crossing actually happened.
         """
-        # in mandelbrot sequence, the first element is always 0
+        # every Mandelbrot sequence starts at zero, by definition
         z = 0
-        
-        # compute sequence over n iterations
+
         for iteration_nb in range(self.max_iterations):
-            z = z ** 2 + c
+            z = z**2 + c
 
-            # if radius of z exceeds a given radius, return number of iterations (i.e breaking the loop as soon as magnitude of z exceeds threshold)
+            # abs() of a complex number is its distance from the origin
             if abs(z) > self.escape_radius:
-
                 if smooth:
                     return iteration_nb + 1 - log(log(abs(z))) / log(2)
                 return iteration_nb
-        
-        # return max iterations if after max number of iterations, radius of z hasn't exceeded 2
+
+        # survived every iteration: treat it as a member of the set
         return self.max_iterations
 
-    def stability(self, c: complex, smooth=False, clamp=True) -> float:
-        """
-        Function to get a stability metric: ratio of escape count to max number of iterations
+    def stability(self, c: complex, smooth: bool = False, clamp: bool = True) -> float:
+        """Escape count rescaled to ``0.0 - 1.0``, ready to be turned into a colour.
+
+        ``0.0`` means "escaped immediately" (far outside the set) and ``1.0``
+        means "never escaped" (inside the set). Normalising here means the
+        colouring code never has to know ``max_iterations``.
+
         Arguments:
-        * clamp: boolean to clamp the stability value
-        Needed when smoothing is activated:
-        escape count greater than 1 or negative can happen, 
-        leading to pixel intensities wrapping around the maximum and minimum levels allowed
+        * clamp: force the result into ``[0, 1]``. The smoothing correction can
+          push a value slightly below 0 or above 1, and feeding that to a colour
+          map makes the intensity *wrap around* — a black pixel suddenly renders
+          white, producing bright speckles along the boundary.
         """
         value = self.escape_count(c, smooth) / self.max_iterations
 

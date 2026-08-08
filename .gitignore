@@ -1,28 +1,67 @@
-# Jupyter Notebook
-.ipynb_checkpoints
+# ---------------------------------------------------------------------
+# Secrets — never commit these
+# ---------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+**/pexels_api_key
+*.pem
+*credentials*.json
 
-# Visual Studio Code
-.vscode
+# ---------------------------------------------------------------------
+# Assets: large, personal, and regenerable. Scripts create these folders.
+# The leading ** matches at any depth (the old */assets pattern only
+# matched one level down, which silently let nested assets through).
+# ---------------------------------------------------------------------
+**/assets/data/
+**/assets/images/
+**/assets/models/
+**/assets/sounds/
+**/assets/3d/
+**/utils/face_detector/models/
 
-# MacOS
+# rendered output
+*.mp4
+*.mov
+*.avi
+*.gif
+*.wav
+*.mp3
+# ...but keep anything used to illustrate the README
+!docs/**/*.gif
+!docs/**/*.mp4
+
+# Blender working files
+*.blend
+*.blend1
+
+# ---------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------------
+# Jupyter
+# ---------------------------------------------------------------------
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# ---------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------
+.vscode/
+.idea/
 .DS_Store
 
-# assets folders
-*/assets/data
-*/assets/images
-*/assets/models
-*/assets/sounds
-*/utils/face_detector/models
-*/assets/3d
-
-# video
-*.mp4
-
-# api key
-*/assets/pexels_api_key
-
-# env
-.env
-
-# pycache
-__pycache__
+# Claude Code local settings
+.claude/settings.local.json

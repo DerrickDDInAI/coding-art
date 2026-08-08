@@ -1,142 +1,125 @@
+"""Turn a folder of still images into an animated GIF.
+
+GIF vs video — what is different
+--------------------------------
+* **Colour order.** OpenCV loads images as **BGR** (blue, green, red) for
+  historical reasons, while every other library — imageio included — assumes
+  **RGB**. Forgetting the ``cv2.cvtColor(img, cv2.COLOR_BGR2RGB)`` below is the
+  single most common bug in this repo's history: the GIF renders fine, but every
+  blue sky comes out orange.
+* **Colour depth.** A GIF frame can only hold 256 distinct colours. Photographic
+  gradients therefore get quantised and can show visible banding. This is a
+  limitation of the format, not of the code.
+* **Timing.** GIFs store a delay *per frame* rather than a global fps. imageio
+  takes that as ``duration`` in **milliseconds**; we accept ``fps`` here and
+  convert, so the API matches ``create_video``.
+* **Size.** GIFs get large fast. ``pygifsicle.optimize`` rewrites the file
+  in place, dropping pixels that do not change between frames. It needs the
+  external ``gifsicle`` binary (``brew install gifsicle``), so we degrade
+  gracefully to an unoptimised GIF if it is missing.
 """
-Program to define the function to create animated gif using list of saved images in given directory and/or subdirectory
-or list
-"""
+
 # =====================================================================
 # Import modules
 # =====================================================================
 
 # import internal modules
-from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union, Callable
 from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Sequence
 from uuid import uuid4
-from random import shuffle
+from warnings import warn
 
 # import 3rd-party modules
 import cv2
 from imageio import get_writer
-from pygifsicle import optimize
 
 # import local modules
-from core.utils.renderer.get_resize_interpolation import get_interpolation
+from core.utils.image_pather import IMAGE_EXTENSIONS
+from core.utils.renderer.frame_sequence import (
+    collect_frame_paths,
+    iter_frames,
+    probe_output_shape,
+)
 
 # =====================================================================
 # Define functions
 # =====================================================================
 
+
 def create_gif(
-    img_dir:Optional[str]=None,
-    img_path_list:List[str]=None,
-    out_path:Optional[str]=None,
-    img_extensions:Set[str]={'.png', '.jpg', '.jpeg'},
-    glob_exp:str="**/*",
-    sort_img_list:bool=True,
-    reverse_img_list:bool=False,
-    shuffle_img_list:bool=False,
-    writer_mode:str='I',
-    duplicate_start_img_amount:int=0,
-    duplicate_end_img_amount:int=0,
-    out_img_shape:Optional[Tuple[int]]=None,
-    resize_fct:Optional[Callable]=None,
-    optimize_gif:Optional[bool]=True
-    # out_img_scale:Optional[Tuple[int]]=None
-    ):
+    img_dir: Optional[str] = None,
+    img_path_list: Optional[List[str]] = None,
+    out_path: Optional[str] = None,
+    fps: int = 25,
+    loop: int = 0,
+    img_extensions: Iterable[str] = IMAGE_EXTENSIONS,
+    recursive: bool = True,
+    sort_img_list: bool = True,
+    reverse_img_list: bool = False,
+    shuffle_img_list: bool = False,
+    writer_mode: str = "I",
+    duplicate_start_img_amount: int = 0,
+    duplicate_end_img_amount: int = 0,
+    out_img_shape: Optional[Sequence[int]] = None,
+    resize_fct: Optional[Callable] = None,
+    rotate_90: Optional[int] = None,
+    optimize_gif: bool = True,
+) -> str:
+    """Render the images of a folder and/or an explicit list into an animated GIF.
+
+    Arguments mirror :func:`core.utils.renderer.videographer.create_video`, plus:
+    * fps: frames per second, converted to a per-frame delay for imageio.
+    * loop: ``0`` loops forever, ``1`` plays once, ``n`` plays n times.
+    * writer_mode: imageio mode; ``"I"`` means "a sequence of images".
+    * optimize_gif: shrink the file with ``gifsicle`` afterwards. It can cost a
+      little quality, but usually cuts the size by half or more.
+
+    Returns: the path the GIF was written to.
     """
-    Program to create animated animated gif from images in given directory and/or subdirectory
-    or list
+    frame_paths = collect_frame_paths(
+        img_dir=img_dir,
+        img_path_list=img_path_list,
+        img_extensions=img_extensions,
+        recursive=recursive,
+        sort_img_list=sort_img_list,
+        reverse_img_list=reverse_img_list,
+        shuffle_img_list=shuffle_img_list,
+    )
 
-    Arguments:
-    * img_dir: images directory
-    * out_path: path where to save the output gif; if None, save gif with a random unique identifier
-    * img_extensions: set of extensions to look for in images directory
-    * reverse_img_list: boolean to reverse list of images; False by default
-    * optimize_gif: to reduce gif memory sif (caution: can decrease the quality)
-    """
-    # if list of image paths is not given
-    if img_path_list is None:
-        # initialize list
-        img_path_list = []
-        
-    # if image directory provided
-    if img_dir is not None:
-        # convert img_dir to Path
-        img_dir = Path(img_dir)
+    # every GIF frame must have the same shape, exactly as for a video
+    out_img_height, out_img_width = probe_output_shape(frame_paths, out_img_shape, rotate_90)
 
-        # get list of images in img directory and extend to img path list
-        img_path_list.extend([str(img_path) for img_path in img_dir.glob(glob_exp) if img_path.suffix in img_extensions])
-
-    # if sort_img_list is true and shuffle_img_list false, sort image paths list
-    if sort_img_list and not shuffle_img_list:
-        img_path_list = sorted(img_path_list, reverse=reverse_img_list)
-
-    # if shuffle_img_list is true, shuffle img path list
-    elif shuffle_img_list:
-        shuffle(img_path_list)
-
-    # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:
-        # generate a random uuid and convert it to string
         out_path = f"{uuid4()}.gif"
 
-    # write gif within context manager
-    with get_writer(out_path, mode=writer_mode) as writer:
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # get number of image paths
-        nb_imgs = len(img_path_list)
+    # imageio wants the on-screen time of one frame, in milliseconds
+    frame_duration_ms = 1000 / fps
 
-
-        # # get shape of first image in list
-        # source_img_height, source_img_width = cv2.imread(img_path_list[0]).shape[:2]
-
-        # if out_img_shape is provided, unpack it
-        if out_img_shape is not None:
-            out_img_height, out_img_width = out_img_shape[:2]
-        else:
-            out_img_height, out_img_width = (None, None)
-
-        # # if out_img_scale is provided, unpack it
-        # if out_img_scale is not None:
-        #     out_img_scale_fy, out_img_scale_fx = out_img_scale
-        # else:
-        #     out_img_scale_fy, out_img_scale_fx = (None, None)
-
-        # iterate over the images to add frame to gif
-        for img_nb, img_path in enumerate(img_path_list, start=1):
-            img = cv2.imread(img_path)
-
-            source_img_height, source_img_width = img.shape[:2]
-
-            if out_img_shape is not None:
-                
-                if resize_fct is not None:
-                    img = resize_fct(img=img, ref_img_shape=out_img_shape)
-
-                else:
-
-                    # get best interpolation or get none if no resize needed
-                    # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
-                    interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape)
-                    
-                    # if needed, resize image
-                    if interpolation is not None:
-                        # img = cv2.resize(img, (out_img_width, out_img_height), fx=out_img_scale_fx, fy=out_img_scale_fy, interpolation=interpolation)
-                        img = cv2.resize(img, (out_img_width, out_img_height), interpolation=interpolation)
-
-            # convert image to RGB
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-            # write several frames for beginning and ending
-            if img_nb == 1:
-                for _ in range(duplicate_start_img_amount):
-                    writer.append_data(img)
-            
-            if img_nb == nb_imgs:
-                for _ in range(duplicate_end_img_amount):
-                    writer.append_data(img)
-
-            # write output frame
-            writer.append_data(img)
+    # the context manager guarantees the GIF trailer is written even on error
+    with get_writer(out_path, mode=writer_mode, duration=frame_duration_ms, loop=loop) as writer:
+        for img in iter_frames(
+            frame_paths,
+            out_img_shape=(out_img_height, out_img_width),
+            resize_fct=resize_fct,
+            rotate_90=rotate_90,
+            duplicate_start_img_amount=duplicate_start_img_amount,
+            duplicate_end_img_amount=duplicate_end_img_amount,
+        ):
+            # OpenCV hands us BGR, imageio expects RGB — convert or your colours
+            # come out swapped (red and blue channels traded)
+            writer.append_data(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
     if optimize_gif:
-        # optimize gif to reduce size
-        optimize(out_path)
+        try:
+            from pygifsicle import optimize
+
+            # rewrites the file in place
+            optimize(out_path)
+        except Exception as error:  # noqa: BLE001 - optimisation is a bonus, never fatal
+            # A missing `gifsicle` binary is by far the most likely cause. The GIF
+            # itself is already written and perfectly valid, so warn and move on.
+            warn(f"Could not optimize the GIF ({error}). Install gifsicle to enable it.", stacklevel=2)
+
+    return str(out_path)

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coding-art"
+version = "0.2.0"
+description = "Exploring computer vision techniques to create generative art."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Van Frausum Derrick" }]
+
+# Only what core/utils itself needs. The heavier, per-project dependencies
+# (mediapipe, tensorflow, blender...) live in requirements.txt so that installing
+# the shared library does not drag in a gigabyte of models.
+dependencies = [
+    "numpy>=1.23",
+    "opencv-python>=4.6,<5",  # OpenCV 5 removed cv2.CascadeClassifier
+    "imageio>=2.19",
+    "pillow>=9.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+# Ship the `core` package (and its sub-packages) only; the notebooks, assets and
+# tests are not part of the importable library.
+include = ["core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Put the repo root on sys.path so `import core.utils...` resolves without an
+# install. This is what makes a bare `pytest` work from the repo root.
+pythonpath = ["."]

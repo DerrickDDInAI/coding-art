@@ -1,0 +1,82 @@
+# Dependencies for coding-art
+#
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+#   pip install -e .            # makes `import core.utils...` work from anywhere
+#
+# Not every project needs every package — the sections below say which is which,
+# so you can comment out what you do not use. Only "core library" is mandatory.
+
+
+# ---------------------------------------------------------------------
+# Core library (core/utils) — needed by essentially every notebook
+# ---------------------------------------------------------------------
+numpy>=1.23
+# Pinned below 5: OpenCV 5 removed the legacy Haar cascade API that
+# core/utils/face_detector relies on (cv2.CascadeClassifier).
+opencv-python>=4.6,<5      # cv2: read, process and render images
+imageio>=2.19              # writing animated GIFs
+pillow>=9.0                # PIL: used by the fractal renderer
+matplotlib>=3.5            # plotting and colour maps
+jupyter>=1.0               # to run the notebooks
+
+# Apple Silicon note: if `import cv2` fails with "incompatible architecture
+# (have 'x86_64', need 'arm64')", you are on an x86 build under an arm64 Python.
+# Fix with:  pip uninstall -y opencv-python && pip install --no-cache-dir opencv-python
+
+
+# ---------------------------------------------------------------------
+# Optional: GIF size optimisation (core/utils/renderer/giffer.py)
+# ---------------------------------------------------------------------
+# Also needs the gifsicle binary:  brew install gifsicle
+pygifsicle>=1.0
+
+
+# ---------------------------------------------------------------------
+# Numeric / scientific — fractals, morphing, voronoi, cellular automaton
+# ---------------------------------------------------------------------
+scipy>=1.9                 # Delaunay triangulation, interpolation, filters
+numba>=0.56                # JIT compilation for the pixel-by-pixel simulations
+pandas>=1.4                # tabular data (Garmin activity plots)
+scikit-image>=0.19         # image similarity metrics (SSIM)
+
+
+# ---------------------------------------------------------------------
+# Pose estimation / object detection
+# ---------------------------------------------------------------------
+mediapipe>=0.9             # pose and hand landmarks
+imutils>=0.5               # small video-stream helpers
+
+
+# ---------------------------------------------------------------------
+# Scraping and data collection
+# ---------------------------------------------------------------------
+requests>=2.28
+pexels-api>=1.0            # core/utils/scraper/pexels.py — needs PEXELS_API_KEY
+pytube>=12.0               # core/sandbox/download_youtube_videos.ipynb
+
+
+# ---------------------------------------------------------------------
+# Image-to-sound (core/image_to_sound) — vendored third-party scripts
+# ---------------------------------------------------------------------
+simpleaudio>=1.0
+wavio>=0.0.4
+pydub>=0.25
+tqdm>=4.64
+
+
+# ---------------------------------------------------------------------
+# Development
+# ---------------------------------------------------------------------
+pytest>=7.0
+
+
+# ---------------------------------------------------------------------
+# NOT installable with pip — listed here so the requirement is not a surprise
+# ---------------------------------------------------------------------
+# bpy         : the Blender Python API. The scripts under core/models_3d run
+#               *inside* Blender (Scripting tab, or `blender --python file.py`),
+#               not in this virtual environment.
+# tensorflow  : only used by core/borders/instance_segmentation.ipynb. Install it
+#               separately if you need it (on Apple Silicon: tensorflow-macos).

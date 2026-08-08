@@ -44,6 +44,45 @@
 #           numpy.linalg.LinAlgError: Singular matrix
 #
 #######################################################
+#
+#   ------------------------------------------------------------------
+#   HOW IMAGE MORPHING WORKS (added for this repo - see docs/cv-primer.md)
+#   ------------------------------------------------------------------
+#   A cross-fade between two photos just averages them, so for a moment you see
+#   two ghostly faces on top of each other. A *morph* also moves the pixels, so
+#   the left eye of image A slides onto the left eye of image B while the colours
+#   blend. That takes four steps:
+#
+#   1. FEATURE POINTS - pick matching landmarks in both images.
+#      `autofeaturepoints()` splits each image into a grid and asks
+#      `cv2.goodFeaturesToTrack` for the single strongest corner in each cell.
+#      "Corner" here means a spot where the intensity changes in two different
+#      directions at once (unlike an edge, which only changes across one), which
+#      is what makes it re-locatable rather than sliding along a line.
+#      Caveat: the two images are searched INDEPENDENTLY, so point #7 in image A
+#      is only loosely "the same place" as point #7 in image B. This is why the
+#      technique works far better on similar images (portrait to portrait) than
+#      on unrelated ones.
+#
+#   2. TRIANGULATION - `scipy.spatial.Delaunay` connects those points into
+#      triangles. Delaunay specifically maximises the smallest angle in the mesh,
+#      i.e. it avoids long thin slivers, which would otherwise stretch into
+#      visible smears during the warp.
+#
+#   3. WARPING - for a given blend factor `alpha` (0 = fully left image,
+#      1 = fully right), each triangle is moved to an in-between position. Three
+#      point pairs uniquely determine an affine transform (translate + rotate +
+#      scale + shear), which is what `np.linalg.solve` recovers below. We then
+#      apply the INVERSE transform: for every pixel of the *output* triangle we
+#      ask "where did this come from in the source?". Going backwards like this
+#      guarantees every output pixel gets a value - going forwards would leave
+#      unfilled holes wherever the triangle stretched.
+#
+#   4. BLENDING - the two warped images are averaged with weights
+#      `(1 - alpha)` and `alpha`. Because the features now sit on top of each
+#      other, the average is sharp instead of ghosted.
+#
+#######################################################
 
 import cv2, time, argparse, ast
 from scipy.ndimage import median_filter
@@ -52,6 +91,11 @@ from scipy.interpolate import RectBivariateSpline
 from matplotlib.path import Path
 import numpy as np
 
+# Module-level frame counter, shared by morphprocess() and batchmorph().
+# (Kept from the original single-file script; it is the reason two morphs cannot
+# be rendered in parallel from the same process.)
+framecnt = 0
+
 #######################################################
 #   https://github.com/ddowd97/Morphing
 #   Author:     David Dowd
@@ -59,6 +103,10 @@ import numpy as np
 #######################################################
 
 def loadTriangles(limg, rimg, featuregridsize, showfeatures) -> tuple:
+    # Build the matching triangle meshes for the two images.
+    # Note that Delaunay is computed on the LEFT points only, and the same
+    # triangle indices (`simplices`) are then applied to the right points. That
+    # is what pairs "triangle i on the left" with "triangle i on the right".
     leftTriList = []
     rightTriList = []
 
@@ -199,10 +247,18 @@ def autofeaturepoints(leimg, riimg, featuregridsize, showfeatures):
                     # crop to a small part of the image and find 1 feature pont or middle point
                     crop_img = img[ (j*h):(j*h)+h, (i*w):(i*w)+w ]
                     gray = cv2.cvtColor(crop_img,cv2.COLOR_BGR2GRAY)
+                    # args: image, max corners, quality level (fraction of the best
+                    # corner's score to accept), minimum distance between corners
                     featurepoints = cv2.goodFeaturesToTrack(gray,1,0.1,10) # TODO: parameters can be tuned
                     if featurepoints is None:
-                        featurepoints = [[[ h/2, w/2 ]]]
-                    featurepoints = np.int0(featurepoints)
+                        # No corner found in this cell (a flat patch of sky, say):
+                        # fall back to its centre so the mesh keeps its structure.
+                        # Order is (x, y) to match goodFeaturesToTrack's output, so
+                        # the horizontal step `w` comes first and `h` second.
+                        featurepoints = [[[ w/2, h/2 ]]]
+                    # np.int0 was removed in NumPy 2.0; np.intp is the same thing
+                    # (a signed integer wide enough to hold an array index).
+                    featurepoints = np.asarray(featurepoints).astype(np.intp)
                     
                     # add feature point to result, optionally draw
                     for featurepoint in featurepoints:
@@ -311,58 +367,69 @@ def batchmorph(imgs,featuregridsize,subpixel,showfeatures,framerate,outimgprefix
     print("\r\nDone. Total time: "+str(time.time()-totaltimerstart)+" s ")
 
 ###############################################################################
+#   Command-line interface
+#
+#   Everything below is guarded by `if __name__ == "__main__":`.
+#   Without that guard, argparse ran the moment the module was *imported*, so
+#   `from core.morphing.morph import batchmorph` in a notebook tried to parse the
+#   notebook's own command line, failed on the required arguments and killed the
+#   kernel. A module should never do work at import time - only define things.
+###############################################################################
 
+# defaults, also used as the argparse defaults below
 mfeaturegridsize = 7 # number of image divisions on each axis, for example 5 creates 5x5 = 25 automatic feature points + 4 corners come automatically
 mframerate = 30 # number of transition frames to render + 1 ; for example 30 renders transiton frames 1..29
 moutprefix = "f" # output image name prefix
-framecnt = 0 # frame counter
 msubpixel = 1 # int, min: 1, max: no hard limit, but 4 should be enough
 msmoothing = 0 # median_filter smoothing
 mshowfeatures = False # render automatically detected features
 mscale = 1.0 # image scale
 
-# batch morph process
-#batchmorph(["f0.png","f30.png","f60.png","f90.png","f120.png","f150.png"],mfeaturegridsize,msubpixel,mshowfeatures,mframerate,moutprefix,msmoothing)
 
-# CLI arguments
+def main() :
+    """Parse the command line and run the batch morph."""
 
-margparser = argparse.ArgumentParser(description="Automatic Image Morphing https://github.com/jankovicsandras/autoimagemorph adapted from https://github.com/ddowd97/Morphing")
-margparser.add_argument("-inframes", default="", required=True, help="REQUIRED input filenames in a list, for example: -inframes ['f0.png','f30.png','f60.png']")
-margparser.add_argument("-outprefix", default="", required=True, help="REQUIRED output filename prefix, -outprefix f  will write/overwrite f1.png f2.png ...")
-margparser.add_argument("-featuregridsize", type=int, default=mfeaturegridsize, help="Number of image divisions on each axis, for example -featuregridsize 5 creates 25 automatic feature points. (default: %(default)s)")
-margparser.add_argument("-framerate", type=int, default=mframerate, help="Frames to render between each keyframe +1, for example -framerate 30 will render 29 frames between -inframes ['f0.png','f30.png'] (default: %(default)s)")
-margparser.add_argument("-subpixel", type=int, default=msubpixel, help="Subpixel calculation to avoid image artifacts, for example -subpixel 4 is good quality, but 16 times slower processing. (default: %(default)s)")
-margparser.add_argument("-smoothing", type=int, default=msmoothing, help="median_filter smoothing/blur to remove image artifacts, for example -smoothing 2 will blur lightly. (default: %(default)s)")
-margparser.add_argument("-showfeatures", action="store_true", help="Flag to render feature points, for example -showfeatures")
-margparser.add_argument("-scale", type=float, default=mscale, help="Input scaling for preview, for example -scale 0.5 will halve both width and height, processing will be approx. 4x faster. (default: %(default)s)")
+    margparser = argparse.ArgumentParser(description="Automatic Image Morphing https://github.com/jankovicsandras/autoimagemorph adapted from https://github.com/ddowd97/Morphing")
+    margparser.add_argument("-inframes", default="", required=True, help="REQUIRED input filenames in a list, for example: -inframes ['f0.png','f30.png','f60.png']")
+    margparser.add_argument("-outprefix", default="", required=True, help="REQUIRED output filename prefix, -outprefix f  will write/overwrite f1.png f2.png ...")
+    margparser.add_argument("-featuregridsize", type=int, default=mfeaturegridsize, help="Number of image divisions on each axis, for example -featuregridsize 5 creates 25 automatic feature points. (default: %(default)s)")
+    margparser.add_argument("-framerate", type=int, default=mframerate, help="Frames to render between each keyframe +1, for example -framerate 30 will render 29 frames between -inframes ['f0.png','f30.png'] (default: %(default)s)")
+    margparser.add_argument("-subpixel", type=int, default=msubpixel, help="Subpixel calculation to avoid image artifacts, for example -subpixel 4 is good quality, but 16 times slower processing. (default: %(default)s)")
+    margparser.add_argument("-smoothing", type=int, default=msmoothing, help="median_filter smoothing/blur to remove image artifacts, for example -smoothing 2 will blur lightly. (default: %(default)s)")
+    margparser.add_argument("-showfeatures", action="store_true", help="Flag to render feature points, for example -showfeatures")
+    margparser.add_argument("-scale", type=float, default=mscale, help="Input scaling for preview, for example -scale 0.5 will halve both width and height, processing will be approx. 4x faster. (default: %(default)s)")
 
-args = vars(margparser.parse_args())
+    args = vars(margparser.parse_args())
 
-# arguments sanity check TODO
+    if( len(args['outprefix']) < 1 ) :
+        print("ERROR: -outprefix (output filename prefix) must be specified.")
+        print("Example\r\n > python morph.py -inframes ['frame0.png','frame30.png','frame60.png'] -outprefix frame ")
+        return 1
 
-if( len( args['inframes'] ) < 2 ) :
-    print("ERROR: command line argument -inframes must be a string array with minimum 2 elements.")
-    print("Example\r\n > python autoimagemorph.py -inframes ['frame0.png','frame30.png','frame60.png'] -outprefix frame ")
-    quit()
+    # -inframes arrives as the STRING "['a.png','b.png']"; literal_eval turns it
+    # into a real list. It is used instead of eval() because it only accepts
+    # plain literals, so a crafted argument cannot execute arbitrary code.
+    try :
+        args['inframes'] = ast.literal_eval(args['inframes'])
+    except (ValueError, SyntaxError) :
+        print("ERROR: -inframes could not be parsed as a Python list of filenames.")
+        print("Example\r\n > python morph.py -inframes ['frame0.png','frame30.png','frame60.png'] -outprefix frame ")
+        return 1
 
-if( len(args['outprefix']) < 1 ) :
-    print("ERROR: -outprefix (output filename prefix) must be specified.")
-    print("Example\r\n > python autoimagemorph.py -inframes ['frame0.png','frame30.png','frame60.png'] -outprefix frame ")
-    quit()
-args['inframes'] = ast.literal_eval(args['inframes'])
+    # A morph needs at least a start and an end image. This check used to run
+    # BEFORE literal_eval, so it measured the length of the raw string instead of
+    # the list - and a single long filename passed it happily.
+    if( not isinstance(args['inframes'], (list, tuple)) or len(args['inframes']) < 2 ) :
+        print("ERROR: command line argument -inframes must be a list with minimum 2 elements.")
+        print("Example\r\n > python morph.py -inframes ['frame0.png','frame30.png','frame60.png'] -outprefix frame ")
+        return 1
 
-args['featuregridsize'] = int(args['featuregridsize'])
+    print("User input: \r\n"+str(args))
 
-args['subpixel'] = int(args['subpixel'])
+    batchmorph(args['inframes'],args['featuregridsize'],args['subpixel'],args['showfeatures'],args['framerate'],args['outprefix'],args['smoothing'],args['scale'])
 
-args['framerate'] = int(args['framerate'])
+    return 0
 
-args['smoothing'] = int(args['smoothing'])
 
-args['scale'] = float(args['scale'])
-
-print("User input: \r\n"+str(args))
-    
-# processing
-
-batchmorph(args['inframes'],args['featuregridsize'],args['subpixel'],args['showfeatures'],args['framerate'],args['outprefix'],args['smoothing'],args['scale'])
+if __name__ == "__main__" :
+    raise SystemExit(main())

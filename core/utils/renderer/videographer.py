@@ -1,132 +1,142 @@
+"""Turn a folder of still images into a video file.
+
+How a video file is written with OpenCV
+---------------------------------------
+A video is just a sequence of images ("frames") plus two pieces of metadata:
+
+* **fps** — how many frames are shown per second. This is what converts a frame
+  count into a duration: 250 frames at 25 fps is a 10-second clip.
+* **codec** (a "fourcc", four character code) — the algorithm used to compress
+  the frames. ``mp4v`` is the safe default here because it ships with almost
+  every OpenCV build and plays everywhere. ``avc1`` / ``H264`` compress much
+  better but depend on codecs your OpenCV build may not have. Note the fourcc is
+  case-sensitive: ``MP4V`` works but makes FFmpeg print a "tag not supported,
+  fallback" warning, because the tag registered for MPEG-4 Part 2 is lowercase.
+
+Two rules trip up almost everyone the first time:
+
+1. **Every frame must have exactly the frame size given to ``VideoWriter``.**
+   OpenCV does not resize for you and does not raise — it silently discards
+   mismatched frames, and you end up with a 0-byte or 1-frame file.
+2. **``VideoWriter`` expects BGR**, which is what ``cv2.imread`` gives you, so
+   no colour conversion is needed here (unlike GIFs — see ``giffer.py``).
 """
-Program to define the function to create video using list of saved images in given directory and/or subdirectory
-or list
-ToDo: create a class renderer to handle video and gif creation
-"""
+
 # =====================================================================
 # Import modules
 # =====================================================================
 
 # import internal modules
-from typing import List, Set, Dict, TypedDict, Tuple, Optional, Union, Callable
 from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Sequence
 from uuid import uuid4
-from random import shuffle
 
 # import 3rd-party modules
 import cv2
-import numpy as np
 
 # import local modules
-from core.utils.renderer.get_resize_interpolation import get_interpolation
+from core.utils.image_pather import IMAGE_EXTENSIONS
+from core.utils.renderer.frame_sequence import (
+    collect_frame_paths,
+    iter_frames,
+    probe_output_shape,
+)
 
 # =====================================================================
 # Define functions
 # =====================================================================
 
+
 def create_video(
-    img_dir:Optional[str]=None,
-    img_path_list:List[str]=None,
-    out_path:Optional[str]=None,
-    codec='MP4V',
-    fps=25,
-    img_extensions:Set[str]={'.png', '.jpg', '.jpeg'},
-    glob_exp:str="**/*",
-    sort_img_list:bool=True,
-    reverse_img_list:bool=False,
-    shuffle_img_list:bool=False,
-    duplicate_start_img_amount:int=0,
-    duplicate_end_img_amount:int=0,
-    out_img_shape:Optional[Tuple[int]]=None,
-    resize_fct:Optional[Callable]=None,
-    rotate_90:Optional[int]=None,
-    # out_img_scale:Optional[Tuple[int]]=None
-    ):
+    img_dir: Optional[str] = None,
+    img_path_list: Optional[List[str]] = None,
+    out_path: Optional[str] = None,
+    codec: str = "mp4v",
+    fps: int = 25,
+    img_extensions: Iterable[str] = IMAGE_EXTENSIONS,
+    recursive: bool = True,
+    sort_img_list: bool = True,
+    reverse_img_list: bool = False,
+    shuffle_img_list: bool = False,
+    duplicate_start_img_amount: int = 0,
+    duplicate_end_img_amount: int = 0,
+    out_img_shape: Optional[Sequence[int]] = None,
+    resize_fct: Optional[Callable] = None,
+    rotate_90: Optional[int] = None,
+) -> str:
+    """Render the images of a folder and/or an explicit list into a video file.
+
+    Arguments:
+    * img_dir: folder holding the frames (searched recursively by default).
+    * img_path_list: explicit frame paths, appended to whatever ``img_dir`` finds.
+    * out_path: where to write. If ``None``, a random unique ``.mp4`` name is used
+      so that two runs never overwrite each other.
+    * codec: fourcc string, four characters (``MP4V``, ``avc1``, ``XVID``...).
+    * fps: frames per second; duration = number of frames / fps.
+    * out_img_shape: ``(height, width)`` of the video. Defaults to the shape of
+      the first frame.
+    * resize_fct: pass ``resize_with_pad`` or ``resize_with_crop`` to keep the
+      aspect ratio of frames whose shape differs from the target.
+    * rotate_90: counter-clockwise quarter turns applied to every frame.
+    * duplicate_start_img_amount / duplicate_end_img_amount: hold the first/last
+      frame for this many extra frames.
+
+    Returns: the path the video was written to.
     """
-    Function to create video using list of saved images in given directory and/or subdirectory
-    or list
-    """
-    # if list of image paths is not given
-    if img_path_list is None:
-        # initialize list
-        img_path_list = []
+    # a fourcc is literally four characters; anything else silently produces a
+    # broken writer, so reject it here where the message is still useful
+    if len(codec) != 4:
+        raise ValueError(f"codec must be a 4-character fourcc string, got {codec!r}")
 
-    if img_dir is not None:
-        # convert img_dir to Path
-        img_dir = Path(img_dir)
+    frame_paths = collect_frame_paths(
+        img_dir=img_dir,
+        img_path_list=img_path_list,
+        img_extensions=img_extensions,
+        recursive=recursive,
+        sort_img_list=sort_img_list,
+        reverse_img_list=reverse_img_list,
+        shuffle_img_list=shuffle_img_list,
+    )
 
-        # get list of images in img directory and extend to img path list
-        img_path_list.extend([str(img_path) for img_path in img_dir.glob(glob_exp) if img_path.suffix in img_extensions])
-        
-    # if sort_img_list is true and shuffle_img_list false, sort image paths list
-    if sort_img_list and not shuffle_img_list:
-        img_path_list = sorted(img_path_list, reverse=reverse_img_list)
+    # the writer needs its frame size up front, before any frame is written
+    out_img_height, out_img_width = probe_output_shape(frame_paths, out_img_shape, rotate_90)
 
-    # if shuffle_img_list is true, shuffle img path list
-    elif shuffle_img_list:
-        shuffle(img_path_list)
-
-    # get number of image paths
-    nb_imgs = len(img_path_list)
-
-    # get shape of first image in list (if no output shape provided, the shape of first image will be the output shape)
-    img_height, img_width, img_channel = cv2.imread(img_path_list[0]).shape
-
-    # # if out_img_scale is provided, unpack it
-    # if out_img_scale is not None:
-    #     out_img_scale_fy, out_img_scale_fx = out_img_scale
-    # else:
-    #     out_img_scale_fy, out_img_scale_fx = (None, None)
-
-    # get best interpolation or get none if no resize needed
-    # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
-    interpolation = get_interpolation((img_height, img_width), out_img_shape=out_img_shape)
-    
-    # if resize needed, update img_height, img_width
-    if interpolation is not None:
-        img_height, img_width, img_channel = out_img_shape
-
-    # if output path is not given, set gif filename with a random unique identifier
     if out_path is None:
-        # generate a random uuid and convert it to string
-        out_path = f"{uuid4()}.{codec[:-1]}"
-    
+        out_path = f"{uuid4()}.mp4"
 
-    # create a videoWriter object
+    # create the destination folder if the caller pointed at one that is missing,
+    # otherwise VideoWriter fails silently and leaves you with no file at all
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+
     fourcc = cv2.VideoWriter_fourcc(*codec)
-    out_video = cv2.VideoWriter(filename=out_path, fourcc=fourcc, fps=fps, frameSize=(img_width, img_height))
 
-    # iterate over the images to add frame to gif
-    for img_nb, img_path in enumerate(img_path_list, start=1):
-        img = cv2.imread(img_path)
+    # frameSize is (width, height) — the cv2 order, not the NumPy one
+    out_video = cv2.VideoWriter(
+        filename=str(out_path),
+        fourcc=fourcc,
+        fps=fps,
+        frameSize=(out_img_width, out_img_height),
+    )
 
-        if rotate_90 is not None:
-            img = np.rot90(img, rotate_90)
+    if not out_video.isOpened():
+        raise RuntimeError(
+            f"Could not open a video writer for {out_path!r} with codec {codec!r}. "
+            "The codec is probably not available in this OpenCV build — try 'MP4V'."
+        )
 
-        if resize_fct is not None:
-            img = resize_fct(img=img, ref_img_shape=(img_height, img_width, img_channel))
+    # try/finally so the file is always finalised, even if a frame fails to read.
+    # Without release() the video header is never written and the file is unplayable.
+    try:
+        for img in iter_frames(
+            frame_paths,
+            out_img_shape=(out_img_height, out_img_width),
+            resize_fct=resize_fct,
+            rotate_90=rotate_90,
+            duplicate_start_img_amount=duplicate_start_img_amount,
+            duplicate_end_img_amount=duplicate_end_img_amount,
+        ):
+            out_video.write(img)
+    finally:
+        out_video.release()
 
-        else:
-            # get best interpolation or get none if no resize needed
-            # interpolation = get_interpolation((source_img_height, source_img_width), out_img_shape=out_img_shape, out_img_scale=out_img_scale)
-            interpolation = get_interpolation((img_height, img_width), out_img_shape=img.shape[:2])
-
-            # if needed, resize image
-            if interpolation is not None:
-                # img = cv2.resize(img, out_img_shape, fx=out_img_scale_fx, fy=out_img_scale_fy, interpolation=interpolation)
-                img = cv2.resize(img, (img_width, img_height), interpolation=interpolation)
-
-        # write several frames for beginning and ending
-        if img_nb == 1:
-            for _ in range(duplicate_start_img_amount):
-                out_video.write(img)
-        
-        if img_nb == nb_imgs:
-            for _ in range(duplicate_end_img_amount):
-                out_video.write(img)
-
-        # write output frame
-        out_video.write(img)
-
-    # release video rendering
-    out_video.release()
+    return str(out_path)
